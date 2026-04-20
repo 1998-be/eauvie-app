@@ -43,7 +43,7 @@ def S(name,**kw): return ParagraphStyle(name,**kw)
 
 def generer_pdf(mesures, classe, probabilites, analyste='', lieu='', source=''):
     pH=mesures['pH']; turbidite=mesures['turb']; temperature=mesures['temp']
-    conductivite=mesures['cond']; nitrates=mesures['no3']; Dioxygène=mesures['o2']; ecoli=mesures['ecoli']
+    conductivite=mesures['cond']; nitrates=mesures['no3']; o2=mesures['o2']; ecoli=mesures['ecoli']
     buffer=io.BytesIO(); W,H=A4
     now=datetime.now(); date_str=now.strftime('%d/%m/%Y'); heure_str=now.strftime('%H:%M')
     ref_str='EV-'+now.strftime('%Y%m%d-%H%M%S')
