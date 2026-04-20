@@ -29,7 +29,7 @@ def conseil_classe(cl):
     return [
         "Cette eau est conforme aux normes OMS. Elle peut etre consommee sans traitement prealable. Veillez a maintenir des conditions de stockage hygieniques.",
         "Des anomalies ont ete detectees sur un ou plusieurs parametres. Il est fortement recommande de filtrer et de faire bouillir cette eau avant toute consommation humaine.",
-        "Cette eau est polluee et impropre a la consommation. Un traitement complet - filtration, desinfection, ebullition - est obligatoire avant tout usage.",
+        "Cette eau est polluée et impropre a la consommation. Un traitement complet - filtration, desinfection, ebullition - est obligatoire avant tout usage.",
         "DANGER EXTREME. Cette eau presente un risque sanitaire majeur. Tout contact doit etre evite. Signalez immediatement la situation aux autorites sanitaires competentes."
     ][cl]
 
