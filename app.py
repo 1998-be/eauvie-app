@@ -67,10 +67,20 @@ def load_model():
     rf = RandomForestClassifier(n_estimators=300,max_depth=10,random_state=42,class_weight='balanced')
     rf.fit(X_train,y_train)
     return rf
-
 rf = load_model()
 
+# CSS — cache COMPLETEMENT la barre toolbar GitHub
 st.markdown('''<style>
+#MainMenu {visibility: hidden !important;}
+header {visibility: hidden !important;}
+footer {visibility: hidden !important;}
+[data-testid='stToolbar'] {display: none !important;}
+[data-testid='stDecoration'] {display: none !important;}
+[data-testid='stHeader'] {display: none !important;}
+.stDeployButton {display: none !important;}
+a[href*='github'] {display: none !important;}
+button[title='View app source'] {display: none !important;}
+button[title='GitHub'] {display: none !important;}
 html,body,[class*='css']{color:#0a0a0a !important;}
 .main{background:linear-gradient(160deg,#dff3fb 0%,#e8f4fd 100%);}
 .block-container{background:rgba(255,255,255,0.97);border-radius:18px;padding:2rem;box-shadow:0 4px 32px rgba(0,119,182,0.12);}
@@ -144,7 +154,7 @@ if st.button('🔍 Analyser la qualité de l’eau'):
             st.markdown('<div class=\'conseil-box\'><span class=\'conseil-title\'>🧴 2. Filtration sur sable et gravier</span><span class=\'conseil-item\'>Couches : gravier grossier, gravier fin, sable grossier, sable fin, charbon de bois.</span><span class=\'conseil-item\'>Verser l’eau par le dessus, récupérer par le bas.</span><span class=\'conseil-item\'>Compléter obligatoirement avec l’ébullition.</span></div>', unsafe_allow_html=True)
             st.markdown('<div class=\'conseil-box\'><span class=\'conseil-title\'>☀️ 3. Désinfection solaire SODIS</span><span class=\'conseil-item\'>Remplir des bouteilles transparentes avec l’eau filtrée.</span><span class=\'conseil-item\'>Exposer 6 heures au soleil (ciel clair) ou 2 jours (nuageux).</span><span class=\'conseil-item\'>Méthode gratuite et prouvée par l’OMS, idéale pour l’Afrique de l’Ouest.</span></div>', unsafe_allow_html=True)
             st.markdown('<div class=\'conseil-box\'><span class=\'conseil-title\'>🧪 4. Chloration</span><span class=\'conseil-item\'>2 gouttes d’eau de Javel à 5 % par litre d’eau trouble, 1 goutte par litre d’eau claire.</span><span class=\'conseil-item\'>Mélanger et attendre 30 minutes avant de consommer.</span><span class=\'conseil-item\'>Efficace contre bactéries et virus.</span></div>', unsafe_allow_html=True)
-            st.markdown('<div class=\'conseil-box\'><span class=\'conseil-title\'>🌱 5. Graines de Moringa</span><span class=\'conseil-item\'>Broyer 2 à 3 graines sèches en poudre fine.</span><span class=\'conseil-item\'>Ajouter à 1 litre d’eau turbide, agiter 1 min puis 5 min lentement.</span><span class=\'conseil-item\'>Décanter 1 heure puis compléter par ébullition ou chloration.</span></div>', unsafe_allow_html=True)
+            st.markdown('<div class=\'conseil-box\'><span class=\'conseil-title\'>🌱 5. Graines de Moringa</span><span class=\'conseil-item\'>Broyer 2 à 3 graines sèches de Moringa oleifera en poudre fine.</span><span class=\'conseil-item\'>Ajouter à 1 litre d’eau turbide, agiter 1 min puis 5 min lentement.</span><span class=\'conseil-item\'>Décanter 1 heure puis compléter par ébullition ou chloration.</span></div>', unsafe_allow_html=True)
             st.markdown('<div class=\'conseil-box\'><span class=\'conseil-title\'>💧 6. Filtre à membrane</span><span class=\'conseil-item\'>Filtre céramique ou à fibres creuses à 0,2 micron.</span><span class=\'conseil-item\'>Retient bactéries et parasites. Compléter avec chloration contre les virus.</span><span class=\'conseil-item\'>Filtres LifeStraw ou Sawyer disponibles dans les ONG locales.</span></div>', unsafe_allow_html=True)
     prd = pd.DataFrame({'Classe':['Potable','Douteuse','Polluée','Dangereuse'],'Probabilité (%)':[round(p*100,1) for p in pr]})
     st.bar_chart(prd.set_index('Classe'))
