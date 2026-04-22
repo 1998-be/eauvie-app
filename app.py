@@ -371,7 +371,7 @@ def afficher_resultat(label_final, cs, conf, pr, classes_labels, conseil_txt, cl
 # MODULE 1 : EAU POTABLE
 # ══════════════════════════════════════════════════════════════
 if module == "potable":
-    st.markdown('<div class="header-box header-potable"><div class="header-title">💧 EauVie — Eau Potable & Domestique</div><div class="header-sub">Analyse intelligente de l'eau à boire ou domestique · afin de garantir une consommation rassurante et bénéfique</div><div class="header-author">Proposée par Charles MEDEZOUNDJI · Normes OMS · Bénin</div></div>',unsafe_allow_html=True)
+    st.markdown("""<div class="header-box header-potable"><div class="header-title">💧 EauVie — Eau Potable & Domestique</div><div class="header-sub">Analyse intelligente de l'eau à boire ou domestique · afin de garantir une consommation rassurante et bénéfique</div><div class="header-author">Proposée par Charles MEDEZOUNDJI · Normes OMS · Bénin</div></div>""",unsafe_allow_html=True)
 
     with st.expander("📋 Normes OMS — 11 paramètres"):
         st.markdown("""<table class="normes-table">
