@@ -4,3 +4,5 @@ pandas
 numpy
 pillow
 reportlab
+folium
+streamlit-folium
