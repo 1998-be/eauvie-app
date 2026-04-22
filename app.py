@@ -371,17 +371,23 @@ def afficher_resultat(label_final, cs, conf, pr, classes_labels, conseil_txt, cl
 # MODULE 1 : EAU POTABLE
 # ══════════════════════════════════════════════════════════════
 if module == "potable":
-    st.markdown("""
-<div class="header-box header-potable">
-    <div class="header-title">💧 EauVie — Eau Potable &amp; Domestique</div>
-    <div class="header-sub">
-        Analyse intelligente de l'eau à boire ou domestique afin de garantir une consommation rassurante et bénéfique
-    </div>
-    <div class="header-author">
-        Proposée par Charles MEDEZOUNDJI · Normes OMS · Bénin
-    </div>
-</div>
-""", unsafe_allow_html=True)
+    st.markdown('<div class="header-box header-potable"><div class="header-title">💧 EauVie — Eau Potable & Domestique</div><div class="header-sub">Analyse intelligente de l'eau à boire ou domestique · afin de garantir une consommation rassurante et bénéfique</div><div class="header-author">Proposée par Charles MEDEZOUNDJI · Normes OMS · Bénin</div></div>',unsafe_allow_html=True)
+
+    with st.expander("📋 Normes OMS — 11 paramètres"):
+        st.markdown("""<table class="normes-table">
+        <tr><th>Catégorie</th><th>Paramètre</th><th>✅ Potable</th><th>⚠️ Douteuse</th><th>❌ Polluée</th><th>☠️ Dangereuse</th></tr>
+        <tr><td>🧫 Microbiologie</td><td>E. coli (UFC/100 mL)</td><td>0</td><td>1 – 10</td><td>10 – 500</td><td>&gt; 500</td></tr>
+        <tr><td rowspan="5">⚡ Physico-chimique</td><td>pH</td><td>6,5 – 8,5</td><td>5,5 – 9,0</td><td>4,5 – 5,5</td><td>&lt; 4,5</td></tr>
+        <tr><td>Turbidité (NTU)</td><td>&lt; 5</td><td>5 – 10</td><td>10 – 50</td><td>&gt; 50</td></tr>
+        <tr><td>Température (°C)</td><td>&lt; 25</td><td>25 – 30</td><td>30 – 35</td><td>&gt; 35</td></tr>
+        <tr><td>Conductivité (µS/cm)</td><td>&lt; 2 500</td><td>2 500 – 3 000</td><td>3 000 – 4 000</td><td>&gt; 4 000</td></tr>
+        <tr><td>Oxygène dissous (mg/L)</td><td>&gt; 6</td><td>4 – 6</td><td>2 – 4</td><td>&lt; 2</td></tr>
+        <tr><td rowspan="5">🧪 Chimique</td><td>Nitrates (mg/L)</td><td>&lt; 50</td><td>50 – 80</td><td>80 – 150</td><td>&gt; 150</td></tr>
+        <tr><td>Nitrites (mg/L)</td><td>&lt; 3</td><td>3 – 5</td><td>5 – 10</td><td>&gt; 10</td></tr>
+        <tr><td>Ammonium (mg/L)</td><td>&lt; 1,5</td><td>1,5 – 3</td><td>3 – 5</td><td>&gt; 5</td></tr>
+        <tr><td>Plomb (mg/L)</td><td>&lt; 0,01</td><td>0,01 – 0,02</td><td>0,02 – 0,05</td><td>&gt; 0,05</td></tr>
+        <tr><td>Chlore résiduel (mg/L)</td><td>0,2 – 0,5</td><td>0,05 – 0,2</td><td>&lt; 0,05</td><td>0</td></tr>
+        </table>""",unsafe_allow_html=True)
         st.caption("Sources : OMS 2017 · Norme béninoise NB 001/2001 · Mama et al. 2011 · SONEB bulletins 2018–2022 · USEPA 2022")
 
     analyste,lieu,source,lat_i,lon_i=bloc_analyste(["Robinet (réseau traité SONEB)","Puits peu profond","Forage profond","Rivière","Fleuve / marigot","Lac","Eau stagnante (mare)","Eau de pluie","Source naturelle","Eau de barrage","Citerne stockée","Autre"])
