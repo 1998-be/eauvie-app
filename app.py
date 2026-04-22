@@ -4,7 +4,6 @@ import pandas as pd
 import numpy as np
 import io
 import json
-import os
 from datetime import datetime
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
@@ -17,6 +16,20 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
     Table, TableStyle, HRFlowable)
 
 st.set_page_config(page_title="EauVie", page_icon="\U0001f4a7", layout="centered")
+
+# ── INITIALISATION SESSION_STATE ─────────────────────────────
+# CRITIQUE : initialiser TOUTES les clés au démarrage
+# pour qu'elles survivent aux reruns Streamlit
+for key, default in [
+    ("carto_points", []),
+    ("dernier_pdf",  None),
+    ("dernier_pdf_nom", ""),
+    ("histo",        []),
+    ("analyse_faite", False),
+    ("dernier_resultat", None),
+]:
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 # ── COULEURS ──────────────────────────────────────────────────
 BLEU_FONCE = colors.HexColor("#023e8a")
@@ -54,20 +67,15 @@ def statut_param(val, pmin, pmax, inverse=False):
 
 def S(name, **kw): return ParagraphStyle(name, **kw)
 
-# ── FICHIER CARTOGRAPHIE (stockage session) ───────────────────
-CARTO_KEY = "carto_points"
-if CARTO_KEY not in st.session_state:
-    st.session_state[CARTO_KEY] = []
-
 # ── GÉNÉRATION PDF ────────────────────────────────────────────
-def generer_pdf(mesures, classe, probabilites, analyste="", lieu="", source="", heure_locale=""):
+def generer_pdf(mesures, classe, probabilites, analyste="", lieu="", source=""):
     pH=mesures["pH"]; turbidite=mesures["turb"]; temperature=mesures["temp"]
     conductivite=mesures["cond"]; nitrates=mesures["no3"]
     o2=mesures["o2"]; ecoli=mesures["ecoli"]
     buffer=io.BytesIO(); W,H=A4
     now=datetime.now()
     date_str=now.strftime("%d/%m/%Y")
-    heure_str=heure_locale if heure_locale else now.strftime("%H:%M")
+    heure_str=now.strftime("%H:%M")
     ref_str="EV-"+now.strftime("%Y%m%d-%H%M%S")
     doc=SimpleDocTemplate(buffer,pagesize=A4,
         leftMargin=1.8*cm,rightMargin=1.8*cm,
@@ -75,7 +83,6 @@ def generer_pdf(mesures, classe, probabilites, analyste="", lieu="", source="", 
         title="Rapport EauVie",author=analyste or "EauVie",
         subject="Analyse physico-chimique et microbiologique \u2014 Normes OMS")
     story=[]
-    # En-t\u00eate
     header=[
         [Paragraph("<b>\U0001f4a7 EauVie</b>",S("hx",fontName="Helvetica-Bold",fontSize=24,textColor=BLANC,alignment=TA_CENTER))],
         [Paragraph("Analyse intelligente de la qualit\u00e9 de l\u2019eau \u2014 Normes OMS<br/>afin de garantir une consommation rassurante et b\u00e9n\u00e9fique.",S("hx2",fontName="Helvetica",fontSize=10.5,textColor=colors.HexColor("#d0eeff"),alignment=TA_CENTER,leading=16))],
@@ -84,63 +91,30 @@ def generer_pdf(mesures, classe, probabilites, analyste="", lieu="", source="", 
     ht=Table(header,colWidths=[W-3.6*cm])
     ht.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),BLEU_MED),("TOPPADDING",(0,0),(-1,-1),10),("BOTTOMPADDING",(0,0),(-1,-1),6),("LEFTPADDING",(0,0),(-1,-1),14),("RIGHTPADDING",(0,0),(-1,-1),14)]))
     story.append(ht); story.append(Spacer(1,0.4*cm))
-    rt=Table([[
-        Paragraph("<b>RAPPORT D\u2019ANALYSE DE L\u2019EAU</b>",S("rd",fontName="Helvetica-Bold",fontSize=11,textColor=BLEU_FONCE,alignment=TA_CENTER)),
-        Paragraph(f"<b>R\u00e9f. :</b> {ref_str}",S("rd2",fontName="Helvetica",fontSize=8.5,textColor=colors.HexColor("#555"),alignment=TA_LEFT)),
-        Paragraph(f"<b>Date :</b> {date_str}  |  <b>Heure :</b> {heure_str}",S("rd3",fontName="Helvetica",fontSize=8.5,textColor=colors.HexColor("#555"),alignment=TA_RIGHT)),
-    ]],colWidths=[7*cm,4.5*cm,6*cm])
+    rt=Table([[Paragraph("<b>RAPPORT D\u2019ANALYSE DE L\u2019EAU</b>",S("rd",fontName="Helvetica-Bold",fontSize=11,textColor=BLEU_FONCE,alignment=TA_CENTER)),Paragraph(f"<b>R\u00e9f. :</b> {ref_str}",S("rd2",fontName="Helvetica",fontSize=8.5,textColor=colors.HexColor("#555"),alignment=TA_LEFT)),Paragraph(f"<b>Date :</b> {date_str}  |  <b>Heure :</b> {heure_str}",S("rd3",fontName="Helvetica",fontSize=8.5,textColor=colors.HexColor("#555"),alignment=TA_RIGHT))]],colWidths=[7*cm,4.5*cm,6*cm])
     rt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),GRIS_CLAIR),("LINEBELOW",(0,0),(-1,-1),1.5,BLEU_CLAIR),("LINETOP",(0,0),(-1,-1),1.5,BLEU_CLAIR),("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7),("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6),("VALIGN",(0,0),(-1,-1),"MIDDLE")]))
     story.append(rt); story.append(Spacer(1,0.5*cm))
-
     def titre_section(txt):
         story.append(HRFlowable(width="100%",thickness=2,color=BLEU_MED,spaceAfter=4))
         story.append(Paragraph(txt,S("h1",fontName="Helvetica-Bold",fontSize=13,textColor=BLEU_FONCE,spaceBefore=10,spaceAfter=5)))
         story.append(HRFlowable(width="100%",thickness=0.5,color=GRIS_MED,spaceAfter=6))
-
     sb=S("sb",fontName="Helvetica",fontSize=9.5,textColor=NOIR,alignment=TA_JUSTIFY,leading=15,spaceAfter=5)
     si=S("si",fontName="Helvetica-Oblique",fontSize=9,textColor=colors.HexColor("#555"),alignment=TA_JUSTIFY,leading=13,spaceAfter=4)
     sn=S("sn",fontName="Helvetica-Oblique",fontSize=8.5,textColor=colors.HexColor("#333"),alignment=TA_JUSTIFY,leading=13)
-
-    # Section 1
     titre_section("1.  CONTEXTE ET PROBL\u00c9MATIQUE")
     story.append(Paragraph("L\u2019eau, ressource vitale et irremplaçable, est au c\u0153ur d\u2019une crise sanitaire silencieuse qui ravage le continent africain. Plus de <b>400 millions d\u2019Africains</b> n\u2019ont toujours pas acc\u00e8s \u00e0 une eau potable s\u00fbre et durable (OMS/UNICEF, 2025). Des milliers de vies sont perdues chaque jour \u2014 principalement des enfants de moins de cinq ans \u2014 victimes de maladies diarrh\u00e9iques, du chol\u00e9ra, de la fi\u00e8vre typho\u00efde et d\u2019autres pathologies directement li\u00e9es \u00e0 la consommation d\u2019une eau de mauvaise qualit\u00e9.",sb))
     story.append(Paragraph("Au B\u00e9nin, l\u2019acc\u00e8s \u00e0 l\u2019eau potable constitue le <b>premier d\u00e9fi prioritaire</b> cit\u00e9 par les citoyens (Afrobarom\u00e8tre, 2024). Les zones rurales et les communaut\u00e9s agricoles sont particuli\u00e8rement expos\u00e9es, leurs sources d\u2019eau \u00e9tant vuln\u00e9rables aux contaminations bact\u00e9riennes, aux polluants chimiques agricoles et aux effets du changement climatique.",sb))
     story.append(Paragraph("<i>Face \u00e0 ce constat alarmant, la question se pose avec urgence\u00a0: comment permettre \u00e0 chaque communaut\u00e9, chaque famille \u2014 m\u00eame sans \u00e9quipement de laboratoire sophistiqu\u00e9 \u2014 de conna\u00eetre et de comprendre la qualit\u00e9 de l\u2019eau qu\u2019elle consomme, avant qu\u2019il ne soit trop tard\u00a0?</i>",si))
     story.append(Paragraph("C\u2019est pr\u00e9cis\u00e9ment \u00e0 cette question qu\u2019EauVie r\u00e9pond. D\u00e9velopp\u00e9e au B\u00e9nin par Charles MEDEZOUNDJI, cette application combine <b>sept param\u00e8tres physico-chimiques et microbiologiques</b> standardis\u00e9s par l\u2019OMS avec un algorithme Random Forest entra\u00een\u00e9 sur 122\u00a0\u00e9chantillons repr\u00e9sentatifs, atteignant une pr\u00e9cision de <b>100\u00a0% (validation crois\u00e9e 5-fold)</b>.",sb))
     story.append(Spacer(1,0.3*cm))
-
-    # Section 2
     titre_section("2.  INFORMATIONS SUR L\u2019\u00c9CHANTILLON ANALYS\u00c9")
-    info_data=[
-        [Paragraph("<b>CHAMP</b>",S("ih",fontName="Helvetica-Bold",fontSize=9,textColor=BLANC,alignment=TA_CENTER)),
-         Paragraph("<b>INFORMATION</b>",S("ih2",fontName="Helvetica-Bold",fontSize=9,textColor=BLANC,alignment=TA_CENTER))],
-        ["R\u00e9f\u00e9rence du rapport", ref_str],
-        ["Date d\u2019analyse", date_str],
-        ["Heure de l\u2019analyse", heure_str],
-        ["Lieu de pr\u00e9l\u00e8vement", lieu or "Non renseign\u00e9"],
-        ["Source de l\u2019eau", source or "Non renseign\u00e9e"],
-        ["Analyste", analyste or "Non renseign\u00e9"],
-        ["Outil utilis\u00e9", "EauVie IA \u2014 Application d\u2019analyse intelligente"],
-        ["M\u00e9thode IA", "Random Forest (500 arbres, pr\u00e9cision = 100\u00a0%)"],
-        ["Param\u00e8tres analys\u00e9s", "pH, Turbidit\u00e9, Temp\u00e9rature, Conductivit\u00e9, Nitrates, Oxyg\u00e8ne dissous, E.\u00a0coli"],
-        ["R\u00e9f\u00e9rentiel", "Normes OMS \u2014 Directives qualit\u00e9 eau de boisson (4e\u00a0\u00e9dition, 2017)"],
-    ]
+    info_data=[[Paragraph("<b>CHAMP</b>",S("ih",fontName="Helvetica-Bold",fontSize=9,textColor=BLANC,alignment=TA_CENTER)),Paragraph("<b>INFORMATION</b>",S("ih2",fontName="Helvetica-Bold",fontSize=9,textColor=BLANC,alignment=TA_CENTER))],["R\u00e9f\u00e9rence du rapport",ref_str],["Date d\u2019analyse",date_str],["Heure de l\u2019analyse",heure_str],["Lieu de pr\u00e9l\u00e8vement",lieu or "Non renseign\u00e9"],["Source de l\u2019eau",source or "Non renseign\u00e9e"],["Analyste",analyste or "Non renseign\u00e9"],["Outil utilis\u00e9","EauVie IA \u2014 Application d\u2019analyse intelligente"],["M\u00e9thode IA","Random Forest (500 arbres, pr\u00e9cision = 100\u00a0%)"],["Param\u00e8tres analys\u00e9s","pH, Turbidit\u00e9, Temp\u00e9rature, Conductivit\u00e9, Nitrates, Oxyg\u00e8ne dissous, E.\u00a0coli"],["R\u00e9f\u00e9rentiel","Normes OMS \u2014 Directives qualit\u00e9 eau de boisson (4e\u00a0\u00e9dition, 2017)"],]
     it=Table(info_data,colWidths=[6.5*cm,11*cm])
     it.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),BLEU_FONCE),("FONTNAME",(0,1),(0,-1),"Helvetica-Bold"),("FONTNAME",(1,1),(1,-1),"Helvetica"),("FONTSIZE",(0,0),(-1,-1),9),("ROWBACKGROUNDS",(0,1),(-1,-1),[BLANC,BLEU_PALE]),("GRID",(0,0),(-1,-1),0.5,GRIS_MED),("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),("LEFTPADDING",(0,0),(-1,-1),8),("RIGHTPADDING",(0,0),(-1,-1),8)]))
     story.append(it); story.append(Spacer(1,0.5*cm))
-
-    # Section 3 - mesures
     titre_section("3.  MESURES PHYSICO-CHIMIQUES ET MICROBIOLOGIQUES")
     story.append(Paragraph("Les sept param\u00e8tres ci-dessous ont \u00e9t\u00e9 mesur\u00e9s en triple r\u00e9p\u00e9tition. La moyenne des trois mesures a \u00e9t\u00e9 soumise \u00e0 l\u2019algorithme EauVie pour garantir la repr\u00e9sentativit\u00e9 et la fiabilit\u00e9 du r\u00e9sultat.",sb))
-    params=[
-        ("pH",f"{pH:.3f}","6,5 \u2013 8,5","Acidit\u00e9 / Basicit\u00e9","Mesure l\u2019activit\u00e9 des ions hydrog\u00e8ne. Un pH hors norme signale une contamination chimique, min\u00e9rale ou la pr\u00e9sence de m\u00e9taux lourds dissous.",statut_param(pH,6.5,8.5)),
-        ("Turbidit\u00e9",f"{turbidite:.3f} NTU","< 5 NTU","Trouble / Particules","Mesure les mati\u00e8res en suspension \u2014 argile, bact\u00e9ries, mati\u00e8res organiques. Une turbidit\u00e9 \u00e9lev\u00e9e r\u00e9duit l\u2019efficacit\u00e9 de la d\u00e9sinfection.",statut_param(turbidite,0,5)),
-        ("Temp\u00e9rature",f"{temperature:.2f} \u00b0C","< 25 \u00b0C","Vitalit\u00e9 microbienne","Au-del\u00e0 de 25\u00a0\u00b0C, la prolif\u00e9ration des micro-organismes pathog\u00e8nes s\u2019acc\u00e9l\u00e8re significativement.",statut_param(temperature,0,25)),
-        ("Conductivit\u00e9",f"{conductivite:.1f} \u00b5S/cm","< 2\u202f500 \u00b5S/cm","Min\u00e9ralisation","Une conductivit\u00e9 \u00e9lev\u00e9e indique une concentration excessive en sels dissous, pouvant nuire \u00e0 la sant\u00e9 \u00e0 long terme.",statut_param(conductivite,0,2500)),
-        ("Nitrates",f"{nitrates:.3f} mg/L","< 50 mg/L","Pollution agricole","Les nitrates proviennent des engrais agricoles. Au-del\u00e0 de 50\u00a0mg/L, ils provoquent la m\u00e9th\u00e9moglobin\u00e9mie chez les nourrissons.",statut_param(nitrates,0,50)),
-        ("Oxyg\u00e8ne dissous",f"{o2:.3f} mg/L","> 6 mg/L","Vitalit\u00e9 / Pollution","Un taux faible indique une d\u00e9composition organique intense. En dessous de 2\u00a0mg/L, l\u2019eau est consid\u00e9r\u00e9e anoxique et dangereuse.",statut_param(o2,6,14)),
-        ("E.\u00a0coli",f"{ecoli:.1f} UFC/100\u00a0mL","0 UFC/100\u00a0mL","Contamination f\u00e9cale","La pr\u00e9sence d\u2019E.\u00a0coli signale une contamination f\u00e9cale directe et la probable pr\u00e9sence d\u2019autres agents pathog\u00e8nes.",statut_param(ecoli,0,0,inverse=True)),
-    ]
+    params=[("pH",f"{pH:.3f}","6,5 \u2013 8,5","Acidit\u00e9 / Basicit\u00e9","Mesure l\u2019activit\u00e9 des ions hydrog\u00e8ne. Un pH hors norme signale une contamination chimique, min\u00e9rale ou la pr\u00e9sence de m\u00e9taux lourds dissous.",statut_param(pH,6.5,8.5)),("Turbidit\u00e9",f"{turbidite:.3f} NTU","< 5 NTU","Trouble / Particules","Mesure les mati\u00e8res en suspension \u2014 argile, bact\u00e9ries, mati\u00e8res organiques. Une turbidit\u00e9 \u00e9lev\u00e9e r\u00e9duit l\u2019efficacit\u00e9 de la d\u00e9sinfection.",statut_param(turbidite,0,5)),("Temp\u00e9rature",f"{temperature:.2f} \u00b0C","< 25 \u00b0C","Vitalit\u00e9 microbienne","Au-del\u00e0 de 25\u00a0\u00b0C, la prolif\u00e9ration des micro-organismes pathog\u00e8nes s\u2019acc\u00e9l\u00e8re significativement.",statut_param(temperature,0,25)),("Conductivit\u00e9",f"{conductivite:.1f} \u00b5S/cm","< 2\u202f500 \u00b5S/cm","Min\u00e9ralisation","Une conductivit\u00e9 \u00e9lev\u00e9e indique une concentration excessive en sels dissous, pouvant nuire \u00e0 la sant\u00e9 \u00e0 long terme.",statut_param(conductivite,0,2500)),("Nitrates",f"{nitrates:.3f} mg/L","< 50 mg/L","Pollution agricole","Les nitrates proviennent des engrais agricoles. Au-del\u00e0 de 50\u00a0mg/L, ils provoquent la m\u00e9th\u00e9moglobin\u00e9mie chez les nourrissons.",statut_param(nitrates,0,50)),("Oxyg\u00e8ne dissous",f"{o2:.3f} mg/L","> 6 mg/L","Vitalit\u00e9 / Pollution","Un taux faible indique une d\u00e9composition organique intense. En dessous de 2\u00a0mg/L, l\u2019eau est consid\u00e9r\u00e9e anoxique et dangereuse.",statut_param(o2,6,14)),("E.\u00a0coli",f"{ecoli:.1f} UFC/100\u00a0mL","0 UFC/100\u00a0mL","Contamination f\u00e9cale","La pr\u00e9sence d\u2019E.\u00a0coli signale une contamination f\u00e9cale directe et la probable pr\u00e9sence d\u2019autres agents pathog\u00e8nes.",statut_param(ecoli,0,0,inverse=True)),]
     mh=[Paragraph(f"<b>{t}</b>",S("mh",fontName="Helvetica-Bold",fontSize=8,textColor=BLANC,alignment=TA_CENTER)) for t in ["Param\u00e8tre","Valeur moyenne","Norme OMS","Signification","Interpr\u00e9tation","Statut"]]
     mes_rows=[mh]
     for nom,val,norme,signif,interp,(stat,coul) in params:
@@ -148,8 +122,6 @@ def generer_pdf(mesures, classe, probabilites, analyste="", lieu="", source="", 
     mt=Table(mes_rows,colWidths=[2.0*cm,2.2*cm,2.0*cm,2.2*cm,6.5*cm,2.3*cm])
     mt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),BLEU_FONCE),("GRID",(0,0),(-1,-1),0.4,GRIS_MED),("ROWBACKGROUNDS",(0,1),(-1,-1),[BLANC,BLEU_PALE]),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5),("LEFTPADDING",(0,0),(-1,-1),4),("RIGHTPADDING",(0,0),(-1,-1),4)]))
     story.append(mt); story.append(Spacer(1,0.5*cm))
-
-    # Section 4 - résultat IA
     titre_section("4.  R\u00c9SULTAT DE L\u2019ANALYSE PAR INTELLIGENCE ARTIFICIELLE")
     coul_res=couleur_classe(classe); label_res=label_classe(classe); conf_res=round(probabilites[classe]*100,1)
     res_t=Table([[Paragraph(f"QUALIT\u00c9 DE L\u2019EAU : {label_res}",S("rb",fontName="Helvetica-Bold",fontSize=18,textColor=BLANC,alignment=TA_CENTER))],[Paragraph(f"Confiance : {conf_res}\u00a0%  |  Random Forest (500 arbres)  |  Pr\u00e9cision : 100\u00a0%",S("rb2",fontName="Helvetica",fontSize=9,textColor=BLANC,alignment=TA_CENTER))]],colWidths=[W-3.6*cm])
@@ -162,8 +134,6 @@ def generer_pdf(mesures, classe, probabilites, analyste="", lieu="", source="", 
     pt=Table([ph_row,pv_row],colWidths=[(W-3.6*cm)/4]*4)
     pt.setStyle(TableStyle([*[("BACKGROUND",(i,0),(i,0),ccls[i]) for i in range(4)],("GRID",(0,0),(-1,-1),0.5,GRIS_MED),("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7),("BACKGROUND",(0,1),(-1,1),GRIS_CLAIR)]))
     story.append(pt); story.append(Spacer(1,0.4*cm))
-
-    # Section 5 - recommandations
     titre_section("5.  INTERPR\u00c9TATION SCIENTIFIQUE ET RECOMMANDATIONS")
     story.append(Paragraph(f"Sur la base des sept mesures physico-chimiques et microbiologiques obtenues et de l\u2019analyse par l\u2019algorithme Random Forest, l\u2019\u00e9chantillon d\u2019eau analys\u00e9 pr\u00e9sente le profil suivant\u00a0:",sb))
     at=Table([[Paragraph(f"AVIS SANITAIRE \u2014 EAU {label_res}\u00a0: {conseil_classe(classe)}",S("al",fontName="Helvetica-Bold",fontSize=9.5,textColor=BLANC,alignment=TA_JUSTIFY,leading=14))]],colWidths=[W-3.6*cm])
@@ -176,8 +146,6 @@ def generer_pdf(mesures, classe, probabilites, analyste="", lieu="", source="", 
         mtt=Table(mr,colWidths=[3.5*cm,14*cm])
         mtt.setStyle(TableStyle([("GRID",(0,0),(-1,-1),0.3,GRIS_MED),("ROWBACKGROUNDS",(0,0),(-1,-1),[BLANC,BLEU_PALE]),("VALIGN",(0,0),(-1,-1),"TOP"),("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),("LEFTPADDING",(0,0),(-1,-1),7),("RIGHTPADDING",(0,0),(-1,-1),7)]))
         story.append(mtt); story.append(Spacer(1,0.3*cm))
-
-    # Section 6 - conformité OMS
     titre_section("6.  TABLEAU DE CONFORMIT\u00c9 AUX NORMES OMS")
     ch=[Paragraph(f"<b>{t}</b>",S("ch",fontName="Helvetica-Bold",fontSize=9,textColor=BLANC,alignment=TA_CENTER)) for t in ["Param\u00e8tre","Valeur mesur\u00e9e","Seuil OMS Potable","Seuil Dangereuse","Conformit\u00e9"]]
     cd=[("pH",f"{pH:.3f}","6,5 \u00e0 8,5","< 4,5 ou > 10",statut_param(pH,6.5,8.5)),("Turbidit\u00e9 (NTU)",f"{turbidite:.3f}","< 5","> 50",statut_param(turbidite,0,5)),("Temp\u00e9rature (\u00b0C)",f"{temperature:.2f}","< 25","> 35",statut_param(temperature,0,25)),("Conductivit\u00e9 (\u00b5S/cm)",f"{conductivite:.1f}","< 2\u00a0500","> 4\u00a0000",statut_param(conductivite,0,2500)),("Nitrates (mg/L)",f"{nitrates:.3f}","< 50","> 150",statut_param(nitrates,0,50)),("Oxyg\u00e8ne dissous (mg/L)",f"{o2:.3f}","> 6","< 2",statut_param(o2,6,14)),("E.\u00a0coli (UFC/100\u00a0mL)",f"{ecoli:.1f}","0","> 500",statut_param(ecoli,0,0,inverse=True)),]
@@ -185,14 +153,13 @@ def generer_pdf(mesures, classe, probabilites, analyste="", lieu="", source="", 
     ct=Table(crows,colWidths=[4.2*cm,3.0*cm,3.8*cm,3.2*cm,3.0*cm])
     ct.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),BLEU_MED),("GRID",(0,0),(-1,-1),0.5,GRIS_MED),("ROWBACKGROUNDS",(0,1),(-1,-1),[BLANC,BLEU_PALE]),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6)]))
     story.append(ct); story.append(Spacer(1,0.4*cm))
-
-    # Section 7 - notes
     titre_section("7.  NOTES M\u00c9THODOLOGIQUES ET LIMITES")
     for i,note in enumerate(["Ce rapport est g\u00e9n\u00e9r\u00e9 automatiquement par EauVie sur la base de la moyenne des trois mesures saisies pour chacun des sept param\u00e8tres. La fiabilit\u00e9 du r\u00e9sultat d\u00e9pend directement de la pr\u00e9cision des mesures effectu\u00e9es sur le terrain et du bon \u00e9talonnage des instruments utilis\u00e9s.","L\u2019algorithme Random Forest a \u00e9t\u00e9 entra\u00een\u00e9 sur 122\u00a0\u00e9chantillons repr\u00e9sentatifs, bas\u00e9s sur les donn\u00e9es OMS, FAO, JMP (OMS/UNICEF), les \u00e9tudes hydrochimiques d\u2019Afrique de l\u2019Ouest (Akoteyon, 2011\u00a0; USEPA, 2022) et les normes nationales du B\u00e9nin. Pr\u00e9cision en validation crois\u00e9e (5-fold)\u00a0: 100\u00a0%.","Ce rapport ne se substitue pas \u00e0 une analyse compl\u00e8te en laboratoire agr\u00e9\u00e9. Pour une certification officielle de potabilit\u00e9, il est recommand\u00e9 de compl\u00e9ter par des tests suppl\u00e9mentaires (m\u00e9taux lourds, pesticides, coliformes totaux, chlore r\u00e9siduel).","R\u00e9f\u00e9rences\u00a0: OMS \u2014 Directives pour la qualit\u00e9 de l\u2019eau de boisson, 4e\u00a0\u00e9dition (2017)\u00a0; USEPA Drinking Water Standards (2022)\u00a0; Normes nationales du B\u00e9nin."],1):
         story.append(Paragraph(f"<b>Note\u00a0{i}\u00a0:</b> {note}",sn)); story.append(Spacer(1,0.15*cm))
     story.append(Spacer(1,0.3*cm))
     story.append(HRFlowable(width="100%",thickness=1.5,color=BLEU_CLAIR,spaceBefore=8,spaceAfter=6))
-    ft=Table([[Paragraph(f"<b>EauVie</b> \u2014 Analyse intelligente de la qualit\u00e9 de l\u2019eau<br/>Propos\u00e9e par <b>Charles MEDEZOUNDJI</b> \u2014 B\u00e9nin, Afrique de l\u2019Ouest<br/>Rapport g\u00e9n\u00e9r\u00e9 le {date_str} \u00e0 {heure_str}\u00a0| R\u00e9f.\u00a0{ref_str}",S("ft1",fontName="Helvetica",fontSize=7.5,textColor=colors.HexColor("#555"),alignment=TA_LEFT,leading=11)),Paragraph("Ce document est g\u00e9n\u00e9r\u00e9 automatiquement.<br/>Il ne remplace pas une analyse en laboratoire agr\u00e9\u00e9.<br/><b>\u00a9 EauVie 2025 \u2014 Tous droits r\u00e9serv\u00e9s</b>",S("ft2",fontName="Helvetica",fontSize=7.5,textColor=colors.HexColor("#555"),alignment=TA_RIGHT,leading=11))]],colWidths=[(W-3.6*cm)/2,(W-3.6*cm)/2])
+    # CORRECTION 3 : © 2026
+    ft=Table([[Paragraph(f"<b>EauVie</b> \u2014 Analyse intelligente de la qualit\u00e9 de l\u2019eau<br/>Propos\u00e9e par <b>Charles MEDEZOUNDJI</b> \u2014 B\u00e9nin, Afrique de l\u2019Ouest<br/>Rapport g\u00e9n\u00e9r\u00e9 le {date_str} \u00e0 {heure_str}\u00a0| R\u00e9f.\u00a0{ref_str}",S("ft1",fontName="Helvetica",fontSize=7.5,textColor=colors.HexColor("#555"),alignment=TA_LEFT,leading=11)),Paragraph("Ce document est g\u00e9n\u00e9r\u00e9 automatiquement.<br/>Il ne remplace pas une analyse en laboratoire agr\u00e9\u00e9.<br/><b>\u00a9 EauVie 2026 \u2014 Tous droits r\u00e9serv\u00e9s</b>",S("ft2",fontName="Helvetica",fontSize=7.5,textColor=colors.HexColor("#555"),alignment=TA_RIGHT,leading=11))]],colWidths=[(W-3.6*cm)/2,(W-3.6*cm)/2])
     ft.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP")])); story.append(ft)
     doc.build(story); result=buffer.getvalue(); buffer.close(); return result
 
@@ -213,7 +180,7 @@ def load_model():
     rf.fit(X_train,y_train); return rf
 rf=load_model()
 
-# ── CSS COMPLET ───────────────────────────────────────────────
+# ── CSS ───────────────────────────────────────────────────────
 st.markdown("""<style>
 #MainMenu{visibility:hidden !important;}header{visibility:hidden !important;}
 footer{visibility:hidden !important;}[data-testid='stToolbar']{display:none !important;}
@@ -221,8 +188,7 @@ html,body,[class*='css']{color:#0a0a0a !important;}
 .main{background:linear-gradient(160deg,#dff3fb 0%,#e8f4fd 100%);}
 .block-container{background:rgba(255,255,255,0.97);border-radius:18px;padding:2rem;box-shadow:0 4px 32px rgba(0,119,182,0.12);}
 .stButton>button{background:linear-gradient(135deg,#0077b6,#00b4d8);color:white !important;font-size:16px;border-radius:14px;padding:12px 28px;width:100%;border:none;font-weight:700;}
-.stButton>button:hover{background:linear-gradient(135deg,#023e8a,#0077b6);}
-.result-box{padding:24px;border-radius:16px;text-align:center;font-size:24px;font-weight:800;margin:18px 0;box-shadow:0 4px 20px rgba(0,0,0,0.1);}
+.result-box{padding:24px;border-radius:16px;text-align:center;font-size:24px;font-weight:800;margin:18px 0;}
 .potable{background:linear-gradient(135deg,#c8f7c5,#a8e6cf);color:#0a4a0a !important;border:3px solid #28a745;}
 .douteuse{background:linear-gradient(135deg,#fff3cd,#ffe082);color:#4a3000 !important;border:3px solid #ffc107;}
 .polluee{background:linear-gradient(135deg,#ffd5d5,#ffab91);color:#5a0000 !important;border:3px solid #dc3545;}
@@ -234,7 +200,7 @@ html,body,[class*='css']{color:#0a0a0a !important;}
 .proto-box{background:linear-gradient(135deg,#f0fff4,#e8f8e8);border-left:5px solid #1b5e20;border-radius:12px;padding:14px 18px;margin-bottom:12px;}
 .proto-title{font-weight:800;color:#1b5e20 !important;font-size:15px;margin-bottom:10px;display:block;}
 .proto-item{color:#0a2a0a !important;font-size:13px;font-weight:500;padding:5px 0;border-bottom:1px solid rgba(27,94,32,0.12);line-height:1.5;display:block;}
-.header-box{background:linear-gradient(135deg,#023e8a,#0077b6,#00b4d8);border-radius:16px;padding:22px 16px;text-align:center;margin-bottom:22px;box-shadow:0 4px 24px rgba(0,119,182,0.35);}
+.header-box{background:linear-gradient(135deg,#023e8a,#0077b6,#00b4d8);border-radius:16px;padding:22px 16px;text-align:center;margin-bottom:22px;}
 .header-title{color:#ffffff !important;font-size:30px;font-weight:800;letter-spacing:2px;}
 .header-sub{color:#d0eeff !important;font-size:13px;margin-top:8px;line-height:1.6;}
 .header-author{color:#a8d8ff !important;font-size:12px;margin-top:6px;font-style:italic;}
@@ -244,7 +210,7 @@ html,body,[class*='css']{color:#0a0a0a !important;}
 .conseil-item{color:#0a0a0a !important;font-size:13px;padding:4px 0;border-bottom:1px solid rgba(0,119,182,0.10);display:block;line-height:1.5;}
 .mesure-group{background:#f8fbff;border:1px solid #c8dff5;border-radius:10px;padding:10px 12px;margin-bottom:8px;}
 .carto-box{background:linear-gradient(135deg,#e8f5e9,#f0fff4);border-left:5px solid #2e7d32;border-radius:12px;padding:14px 18px;margin:12px 0;}
-.contact-box{background:linear-gradient(135deg,#023e8a,#0077b6);border-radius:14px;padding:18px;text-align:center;margin-top:20px;}
+.pdf-box{background:linear-gradient(135deg,#e3f2fd,#e8f4fd);border-left:5px solid #0077b6;border-radius:12px;padding:14px 18px;margin:12px 0;}
 .normes-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
 .normes-table th{background:#023e8a;color:white;padding:8px 10px;text-align:center;font-weight:700;}
 .normes-table td{padding:7px 10px;text-align:center;border:1px solid #e0e0e0;color:#0a0a0a !important;font-weight:500;}
@@ -261,20 +227,12 @@ st.markdown(
     '<div class="header-sub">Analyse intelligente de la qualit\u00e9 de l\u2019eau \u2014 Normes OMS<br>'
     'afin de garantir une consommation rassurante et b\u00e9n\u00e9fique.</div>'
     '<div class="header-author">Propos\u00e9e par Charles MEDEZOUNDJI</div>'
-    '</div>',
-    unsafe_allow_html=True)
+    '</div>', unsafe_allow_html=True)
 
-# ── NORMES OMS — tableau HTML esthétique ─────────────────────
+# ── NORMES OMS ────────────────────────────────────────────────
 with st.expander("\U0001f4cb Normes OMS de r\u00e9f\u00e9rence \u2014 7 param\u00e8tres"):
-    st.markdown("""
-    <table class="normes-table">
-      <tr>
-        <th>Param\u00e8tre</th>
-        <th>\u2705 Potable</th>
-        <th>\u26a0\ufe0f Douteuse</th>
-        <th>\u274c Pollu\u00e9e</th>
-        <th>\u2620\ufe0f Dangereuse</th>
-      </tr>
+    st.markdown("""<table class="normes-table">
+      <tr><th>Param\u00e8tre</th><th>\u2705 Potable</th><th>\u26a0\ufe0f Douteuse</th><th>\u274c Pollu\u00e9e</th><th>\u2620\ufe0f Dangereuse</th></tr>
       <tr><td>pH</td><td>6,5 \u00e0 8,5</td><td>5,5 \u00e0 9,0</td><td>4,5 \u00e0 5,5</td><td>inf\u00e9rieur \u00e0 4,5</td></tr>
       <tr><td>Turbidit\u00e9 (NTU)</td><td>inf\u00e9rieur \u00e0 5</td><td>5 \u00e0 10</td><td>10 \u00e0 50</td><td>sup\u00e9rieur \u00e0 50</td></tr>
       <tr><td>Temp\u00e9rature (\u00b0C)</td><td>inf\u00e9rieur \u00e0 25</td><td>25 \u00e0 30</td><td>30 \u00e0 35</td><td>sup\u00e9rieur \u00e0 35</td></tr>
@@ -282,70 +240,59 @@ with st.expander("\U0001f4cb Normes OMS de r\u00e9f\u00e9rence \u2014 7 param\u0
       <tr><td>Nitrates (mg/L)</td><td>inf\u00e9rieur \u00e0 50</td><td>50 \u00e0 80</td><td>80 \u00e0 150</td><td>sup\u00e9rieur \u00e0 150</td></tr>
       <tr><td>Oxyg\u00e8ne dissous (mg/L)</td><td>sup\u00e9rieur \u00e0 6</td><td>4 \u00e0 6</td><td>2 \u00e0 4</td><td>inf\u00e9rieur \u00e0 2</td></tr>
       <tr><td>E. coli (UFC/100\u00a0mL)</td><td>0</td><td>1 \u00e0 10</td><td>10 \u00e0 500</td><td>sup\u00e9rieur \u00e0 500</td></tr>
-    </table>
-    """, unsafe_allow_html=True)
+    </table>""", unsafe_allow_html=True)
 
 # ── PROTOCOLES ────────────────────────────────────────────────
 with st.expander("\U0001f52c Protocoles de mesure \u2014 7 param\u00e8tres"):
-    for titre, items in [
-        ("\U0001f9ea pH \u2014 Potentiom\u00e8tre / pH-m\u00e8tre",["\U0001f527 Outil\u00a0: pH-m\u00e8tre num\u00e9rique ou bandelettes indicatrices de pH","1. \u00c9talonner avec les solutions tampon pH\u00a04, pH\u00a07 et pH\u00a010","2. Plonger l\u2019\u00e9lectrode propre dans l\u2019\u00e9chantillon","3. Attendre la stabilisation (environ 30\u00a0secondes)","4. Lire et noter la valeur affich\u00e9e","5. Rincer l\u2019\u00e9lectrode \u00e0 l\u2019eau distill\u00e9e apr\u00e8s chaque mesure"]),
-        ("\U0001f30a Turbidit\u00e9 \u2014 Turbidim\u00e8tre num\u00e9rique (NTU)",["\U0001f527 Outil\u00a0: Turbidim\u00e8tre num\u00e9rique ou comparateur visuel","1. Remplir le tube de mesure avec l\u2019\u00e9chantillon","2. Essuyer le tube pour \u00e9liminer toute trace de doigts","3. Ins\u00e9rer le tube et fermer le couvercle","4. Lire la valeur en NTU affich\u00e9e","5. R\u00e9p\u00e9ter 3\u00a0fois et calculer la moyenne"]),
-        ("\U0001f321\ufe0f Temp\u00e9rature \u2014 Thermom\u00e8tre \u00e9lectronique",["\U0001f527 Outil\u00a0: Thermom\u00e8tre num\u00e9rique \u00e0 sonde immersible (pr\u00e9cision 0,1\u00a0\u00b0C)","1. S\u2019assurer que la sonde est propre et s\u00e8che","2. Plonger la sonde directement dans l\u2019\u00e9chantillon","3. Attendre la stabilisation (1 \u00e0 2\u00a0minutes)","4. Lire et noter la temp\u00e9rature en \u00b0C","5. Mesurer id\u00e9alement sur le terrain, \u00e0 la source"]),
-        ("\u26a1 Conductivit\u00e9 \u2014 Conductim\u00e8tre num\u00e9rique (\u00b5S/cm)",["\U0001f527 Outil\u00a0: Conductim\u00e8tre portable avec cellule de conductivit\u00e9","1. \u00c9talonner avec une solution \u00e9talon certifi\u00e9e","2. Rincer la cellule deux fois avec l\u2019\u00e9chantillon","3. Plonger la cellule et activer la mesure","4. Attendre la stabilisation et lire la valeur en \u00b5S/cm","5. Rincer la cellule \u00e0 l\u2019eau distill\u00e9e apr\u00e8s usage"]),
-        ("\U0001f33f Nitrates \u2014 Spectrophotom\u00e8tre ou bandelettes r\u00e9actives",["\U0001f527 Outil\u00a0: Spectrophotom\u00e8tre portable ou kit colorim\u00e9trique (bandelettes nitrates)","1. Filtrer l\u2019\u00e9chantillon sur membrane 0,45\u00a0micron","2. Tremper la bandelette 1\u00a0seconde dans l\u2019eau","3. Attendre le temps de r\u00e9action (60\u00a0secondes)","4. Comparer la couleur \u00e0 la charte colorim\u00e9trique","5. Lire et noter la concentration en mg/L"]),
-        ("\U0001f4a8 Oxyg\u00e8ne dissous \u2014 Oxym\u00e8tre \u00e9lectronique",["\U0001f527 Outil\u00a0: Oxym\u00e8tre num\u00e9rique portable avec sonde \u00e0 membrane","1. \u00c9talonner la sonde dans l\u2019air satur\u00e9 en humidit\u00e9 (10\u00a0min)","2. Plonger la sonde sans cr\u00e9er de bulles d\u2019air","3. Agiter tr\u00e8s doucement et attendre 1 \u00e0 2\u00a0minutes","4. Lire la valeur en mg/L affich\u00e9e","5. Rincer la sonde \u00e0 l\u2019eau distill\u00e9e apr\u00e8s usage"]),
-        ("\U0001f9eb E.\u00a0coli \u2014 Test de pr\u00e9sence / absence",["\U0001f527 Outil\u00a0: Kit Colilert (IDEXX), bandelettes Compact Dry EC ou milieu m-FC","1. Pr\u00e9lever 100\u00a0mL d\u2019eau dans un flacon st\u00e9rile","2. Ajouter le r\u00e9actif Colilert et m\u00e9langer jusqu\u2019\u00e0 dissolution","3. Incuber \u00e0 35\u00a0\u00b0C pendant 24 \u00e0 28\u00a0heures","4. Fluorescence sous UV = pr\u00e9sence d\u2019E.\u00a0coli","5. Exprimer le r\u00e9sultat en UFC/100\u00a0mL"]),
+    for titre_p, items_p in [
+        ("\U0001f9ea pH \u2014 Potentiom\u00e8tre / pH-m\u00e8tre",["\U0001f527 Outil\u00a0: pH-m\u00e8tre num\u00e9rique ou bandelettes de pH","1. \u00c9talonner avec les solutions tampon pH\u00a04, pH\u00a07 et pH\u00a010","2. Plonger l\u2019\u00e9lectrode propre dans l\u2019\u00e9chantillon","3. Attendre la stabilisation (environ 30\u00a0secondes)","4. Lire et noter la valeur affich\u00e9e","5. Rincer l\u2019\u00e9lectrode \u00e0 l\u2019eau distill\u00e9e apr\u00e8s chaque mesure"]),
+        ("\U0001f30a Turbidit\u00e9 \u2014 Turbidim\u00e8tre (NTU)",["\U0001f527 Outil\u00a0: Turbidim\u00e8tre num\u00e9rique","1. Remplir le tube avec l\u2019\u00e9chantillon","2. Essuyer le tube pour \u00e9liminer les traces","3. Ins\u00e9rer dans l\u2019appareil et fermer","4. Lire la valeur en NTU","5. R\u00e9p\u00e9ter 3\u00a0fois et calculer la moyenne"]),
+        ("\U0001f321\ufe0f Temp\u00e9rature \u2014 Thermom\u00e8tre \u00e9lectronique",["\U0001f527 Outil\u00a0: Thermom\u00e8tre num\u00e9rique \u00e0 sonde immersible (pr\u00e9cision 0,1\u00a0\u00b0C)","1. S\u2019assurer que la sonde est propre","2. Plonger directement dans l\u2019\u00e9chantillon","3. Attendre la stabilisation (1 \u00e0 2\u00a0minutes)","4. Lire et noter la temp\u00e9rature en \u00b0C","5. Mesurer id\u00e9alement sur le terrain"]),
+        ("\u26a1 Conductivit\u00e9 \u2014 Conductim\u00e8tre (\u00b5S/cm)",["\U0001f527 Outil\u00a0: Conductim\u00e8tre portable","1. \u00c9talonner avec une solution \u00e9talon certifi\u00e9e","2. Rincer la cellule deux fois avec l\u2019\u00e9chantillon","3. Plonger la cellule et activer la mesure","4. Lire la valeur en \u00b5S/cm","5. Rincer apr\u00e8s usage"]),
+        ("\U0001f33f Nitrates \u2014 Spectrophotom\u00e8tre ou bandelettes",["\U0001f527 Outil\u00a0: Spectrophotom\u00e8tre ou kit colorim\u00e9trique","1. Filtrer l\u2019\u00e9chantillon sur membrane 0,45\u00a0micron","2. Tremper la bandelette 1\u00a0seconde","3. Attendre 60\u00a0secondes","4. Comparer \u00e0 la charte colorim\u00e9trique","5. Lire la concentration en mg/L"]),
+        ("\U0001f4a8 Oxyg\u00e8ne dissous \u2014 Oxym\u00e8tre \u00e9lectronique",["\U0001f527 Outil\u00a0: Oxym\u00e8tre num\u00e9rique avec sonde \u00e0 membrane","1. \u00c9talonner dans l\u2019air satur\u00e9 en humidit\u00e9 (10\u00a0min)","2. Plonger sans cr\u00e9er de bulles d\u2019air","3. Agiter doucement et attendre 1 \u00e0 2\u00a0minutes","4. Lire la valeur en mg/L","5. Rincer apr\u00e8s usage"]),
+        ("\U0001f9eb E.\u00a0coli \u2014 Test Colilert ou milieu m-FC",["\U0001f527 Outil\u00a0: Kit Colilert (IDEXX) ou Compact Dry EC","1. Pr\u00e9lever 100\u00a0mL dans un flacon st\u00e9rile","2. Ajouter le r\u00e9actif Colilert et m\u00e9langer","3. Incuber \u00e0 35\u00a0\u00b0C pendant 24 \u00e0 28\u00a0heures","4. Fluorescence sous UV = pr\u00e9sence d\u2019E.\u00a0coli","5. Exprimer en UFC/100\u00a0mL"]),
     ]:
-        items_html="".join([f'<span class="proto-item">{i}</span>' for i in items])
-        st.markdown(f'<div class="proto-box"><span class="proto-title">{titre}</span>{items_html}</div>',unsafe_allow_html=True)
+        items_html="".join([f'<span class="proto-item">{i}</span>' for i in items_p])
+        st.markdown(f'<div class="proto-box"><span class="proto-title">{titre_p}</span>{items_html}</div>',unsafe_allow_html=True)
 
-# ── INFORMATIONS ANALYSTE ─────────────────────────────────────
+# ── ANALYSTE ──────────────────────────────────────────────────
 st.markdown('<span class="section-title">\U0001f464 Informations sur l\u2019analyste et le pr\u00e9l\u00e8vement</span>',unsafe_allow_html=True)
-analyste = st.text_input("\U0001f464 Nom complet de l\u2019analyste *", placeholder="Ex\u00a0: Jean KOFFI", help="Obligatoire \u2014 ce nom figurera dans le rapport officiel")
+analyste = st.text_input("\U0001f464 Nom complet de l\u2019analyste *", placeholder="Ex\u00a0: Jean KOFFI")
 lieu     = st.text_input("\U0001f4cd Lieu de pr\u00e9l\u00e8vement *", placeholder="Ex\u00a0: Village de Kpanr\u00f4u, commune de Djougou")
 SOURCES  = ["Robinet (r\u00e9seau trait\u00e9)","Puits peu profond","Forage profond","Rivi\u00e8re","Fleuve","Lac","Marigot","Eau stagnante (mare)","Eau de pluie collect\u00e9e","Source naturelle","Ros\u00e9e collect\u00e9e","Eau de mer / c\u00f4ti\u00e8re","Eau de barrage","Eau de citerne stock\u00e9e","Autre"]
 source   = st.selectbox("\U0001f30a Source de l\u2019eau *", SOURCES)
+st.markdown('<span class="section-title">\U0001f30d Coordonn\u00e9es g\u00e9ographiques (pour la cartographie)</span>',unsafe_allow_html=True)
+cg1,cg2  = st.columns(2)
+lat_input= cg1.number_input("Latitude",  value=6.3703, step=0.0001, format="%.4f")
+lon_input= cg2.number_input("Longitude", value=2.4305, step=0.0001, format="%.4f")
 
-# Coordonnées pour la cartographie
-st.markdown('<span class="section-title">\U0001f30d Coordonn\u00e9es g\u00e9ographiques (optionnel)</span>',unsafe_allow_html=True)
-cg1, cg2 = st.columns(2)
-lat_input = cg1.number_input("Latitude", value=6.3703, step=0.0001, format="%.4f", help="Ex\u00a0: 6.3703 pour Cotonou")
-lon_input = cg2.number_input("Longitude", value=2.4305, step=0.0001, format="%.4f", help="Ex\u00a0: 2.4305 pour Cotonou")
-
-# ── SAISIE DES MESURES ────────────────────────────────────────
+# ── SAISIE MESURES ────────────────────────────────────────────
 st.markdown('<span class="section-title">\U0001f52c Ins\u00e9rez les trois mesures de chaque param\u00e8tre</span>',unsafe_allow_html=True)
 st.info("\u2139\ufe0f Saisissez les trois mesures r\u00e9alis\u00e9es pour chaque param\u00e8tre. La moyenne sera calcul\u00e9e automatiquement.")
 
 def triple_input(label, label_card, ptext, pnorm, min_v, max_v, default, step, unit=""):
     st.markdown(f'<div class="pcard"><span class="plabel">{label_card}</span><span class="ptext">{ptext}</span><span class="pnorm">{pnorm}</span></div>',unsafe_allow_html=True)
     st.markdown('<div class="mesure-group">',unsafe_allow_html=True)
-    ca,cb,cc = st.columns(3)
-    v1 = ca.number_input(f"{label} \u2014 Mesure\u00a01", min_value=min_v, max_value=max_v, value=default, step=step, key=f"{label}_1")
-    v2 = cb.number_input(f"{label} \u2014 Mesure\u00a02", min_value=min_v, max_value=max_v, value=default, step=step, key=f"{label}_2")
-    v3 = cc.number_input(f"{label} \u2014 Mesure\u00a03", min_value=min_v, max_value=max_v, value=default, step=step, key=f"{label}_3")
+    ca,cb,cc=st.columns(3)
+    v1=ca.number_input(f"{label} \u2014 Mesure\u00a01",min_value=min_v,max_value=max_v,value=default,step=step,key=f"{label}_1")
+    v2=cb.number_input(f"{label} \u2014 Mesure\u00a02",min_value=min_v,max_value=max_v,value=default,step=step,key=f"{label}_2")
+    v3=cc.number_input(f"{label} \u2014 Mesure\u00a03",min_value=min_v,max_value=max_v,value=default,step=step,key=f"{label}_3")
     st.markdown('</div>',unsafe_allow_html=True)
-    moy = round((v1+v2+v3)/3, 4)
+    moy=round((v1+v2+v3)/3,4)
     st.caption(f"\U0001f4ca Moyenne {label}\u00a0: **{moy}** {unit}")
     return moy
 
-pH  = triple_input("pH","\U0001f9ea pH \u2014 Potentiel Hydrog\u00e8ne","Mesure l\u2019acidit\u00e9 ou la basicit\u00e9 de l\u2019eau. pH bas\u00a0: risque de m\u00e9taux toxiques. pH \u00e9lev\u00e9\u00a0: contamination min\u00e9rale ou chimique.","Norme OMS\u00a0: 6,5 \u00e0 8,5",0.0,14.0,7.0,0.01)
-tu  = triple_input("Turbidite","\U0001f30a Turbidit\u00e9 (NTU) \u2014 Trouble de l\u2019eau","Particules en suspension\u00a0: argile, bact\u00e9ries, mati\u00e8res organiques. Eau trouble\u00a0: agents pathog\u00e8nes possibles.","Norme OMS\u00a0: inf\u00e9rieur \u00e0 5 NTU",0.0,200.0,2.0,0.01,"NTU")
-te  = triple_input("Temperature","\U0001f321\ufe0f Temp\u00e9rature (\u00b0C) \u2014 Activit\u00e9 microbienne","Au-del\u00e0 de 25\u00a0\u00b0C, la prolif\u00e9ration des micro-organismes pathog\u00e8nes s\u2019acc\u00e9l\u00e8re significativement.","Norme OMS\u00a0: inf\u00e9rieur \u00e0 25\u00a0\u00b0C",0.0,60.0,22.0,0.1,"\u00b0C")
-co  = triple_input("Conductivite","\u26a1 Conductivit\u00e9 (\u00b5S/cm) \u2014 Min\u00e9ralisation","Conductivit\u00e9 \u00e9lev\u00e9e\u00a0: concentration excessive en sels et min\u00e9raux dissous, nocive \u00e0 long terme.","Norme OMS\u00a0: inf\u00e9rieur \u00e0 2\u202f500 \u00b5S/cm",0.0,10000.0,350.0,1.0,"\u00b5S/cm")
-no  = triple_input("Nitrates","\U0001f33f Nitrates (mg/L) \u2014 Pollution agricole","Proviennent des engrais agricoles. Au-del\u00e0 de 50\u00a0mg/L, ils provoquent la m\u00e9th\u00e9moglobin\u00e9mie chez les nourrissons.","Norme OMS\u00a0: inf\u00e9rieur \u00e0 50 mg/L",0.0,500.0,5.0,0.1,"mg/L")
-o2  = triple_input("O2","\U0001f4a8 Oxyg\u00e8ne dissous (mg/L) \u2014 Vitalit\u00e9 de l\u2019eau","Taux faible\u00a0: d\u00e9composition organique intense, bact\u00e9ries. En dessous de 2\u00a0mg/L\u00a0: eau anoxique et dangereuse.","Norme\u00a0: sup\u00e9rieur \u00e0 6 mg/L",0.0,14.0,7.0,0.01,"mg/L")
-ec  = triple_input("Ecoli","\U0001f9eb E.\u00a0coli (UFC/100\u00a0mL) \u2014 Contamination f\u00e9cale","Indicateur direct de contamination f\u00e9cale. Toute pr\u00e9sence signale un risque sanitaire et la probable pr\u00e9sence d\u2019autres pathog\u00e8nes.","Norme OMS\u00a0: 0 UFC/100\u00a0mL",0.0,10000.0,0.0,1.0,"UFC/100 mL")
+pH = triple_input("pH","\U0001f9ea pH \u2014 Potentiel Hydrog\u00e8ne","Mesure l\u2019acidit\u00e9 ou la basicit\u00e9. pH bas\u00a0: m\u00e9taux toxiques. pH \u00e9lev\u00e9\u00a0: contamination chimique.","Norme OMS\u00a0: 6,5 \u00e0 8,5",0.0,14.0,7.0,0.01)
+tu = triple_input("Turbidite","\U0001f30a Turbidit\u00e9 (NTU)","Particules en suspension. Eau trouble\u00a0: agents pathog\u00e8nes possibles.","Norme OMS\u00a0: inf\u00e9rieur \u00e0 5 NTU",0.0,200.0,2.0,0.01,"NTU")
+te = triple_input("Temperature","\U0001f321\ufe0f Temp\u00e9rature (\u00b0C)","Au-del\u00e0 de 25\u00a0\u00b0C, la prolif\u00e9ration des micro-organismes s\u2019acc\u00e9l\u00e8re.","Norme OMS\u00a0: inf\u00e9rieur \u00e0 25\u00a0\u00b0C",0.0,60.0,22.0,0.1,"\u00b0C")
+co = triple_input("Conductivite","\u26a1 Conductivit\u00e9 (\u00b5S/cm)","Conductivit\u00e9 \u00e9lev\u00e9e\u00a0: sels excessifs, nocifs \u00e0 long terme.","Norme OMS\u00a0: inf\u00e9rieur \u00e0 2\u202f500 \u00b5S/cm",0.0,10000.0,350.0,1.0,"\u00b5S/cm")
+no = triple_input("Nitrates","\U0001f33f Nitrates (mg/L)","Engrais agricoles. Au-del\u00e0 de 50\u00a0mg/L\u00a0: m\u00e9th\u00e9moglobin\u00e9mie chez les nourrissons.","Norme OMS\u00a0: inf\u00e9rieur \u00e0 50 mg/L",0.0,500.0,5.0,0.1,"mg/L")
+o2 = triple_input("O2","\U0001f4a8 Oxyg\u00e8ne dissous (mg/L)","Taux faible\u00a0: d\u00e9composition, bact\u00e9ries. Inf\u00e9rieur \u00e0 2\u00a0mg/L\u00a0: eau anoxique.","Norme\u00a0: sup\u00e9rieur \u00e0 6 mg/L",0.0,14.0,7.0,0.01,"mg/L")
+ec = triple_input("Ecoli","\U0001f9eb E.\u00a0coli (UFC/100\u00a0mL)","Contamination f\u00e9cale directe. Toute pr\u00e9sence = risque sanitaire.","Norme OMS\u00a0: 0 UFC/100\u00a0mL",0.0,10000.0,0.0,1.0,"UFC/100 mL")
 
 st.markdown("---")
-
-# ── MAPPING COULEURS RÉSULTAT ─────────────────────────────────
-COULEURS_CARTO = {0:"green",1:"orange",2:"red",3:"darkred"}
-MP = {
-    0:("\U0001f4a7 POTABLE","potable","Eau conforme aux normes OMS. Consommation possible sans risque."),
-    1:("\u26a0\ufe0f DOUTEUSE","douteuse","Anomalies d\u00e9tect\u00e9es. Filtrez et faites bouillir avant consommation."),
-    2:("\u274c POLLU\u00c9E","polluee","Eau pollu\u00e9e. Ne pas consommer. Traitement obligatoire."),
-    3:("\u2620\ufe0f DANGEREUSE","dangereuse","DANGER EXTR\u00caM E. Tout contact \u00e0 \u00e9viter. Risque sanitaire majeur."),
-}
+MP={0:("\U0001f4a7 POTABLE","potable","Eau conforme aux normes OMS. Consommation possible sans risque."),1:("\u26a0\ufe0f DOUTEUSE","douteuse","Anomalies d\u00e9tect\u00e9es. Filtrez et faites bouillir avant consommation."),2:("\u274c POLLU\u00c9E","polluee","Eau pollu\u00e9e. Ne pas consommer. Traitement obligatoire."),3:("\u2620\ufe0f DANGEREUSE","dangereuse","DANGER EXTR\u00caM E. Tout contact \u00e0 \u00e9viter. Risque sanitaire majeur."),}
 
 # ── BOUTON ANALYSE ────────────────────────────────────────────
 if st.button("\U0001f50d Analyser la qualit\u00e9 de l\u2019eau"):
@@ -357,139 +304,161 @@ if st.button("\U0001f50d Analyser la qualit\u00e9 de l\u2019eau"):
     else:
         dfm=pd.DataFrame({"pH":[pH],"Turbidite":[tu],"Temperature":[te],"Conductivite":[co],"Nitrates":[no],"O2":[o2],"Ecoli":[ec]})
         cl=rf.predict(dfm)[0]; pr=rf.predict_proba(dfm)[0]
-        lb,cs,co_msg=MP[cl]; conf=str(round(pr[cl]*100,1))
-        st.markdown(f'<div class="result-box {cs}">{lb}<br><span style="font-size:14px;font-weight:600;">Confiance du mod\u00e8le\u00a0: {conf}\u00a0%</span></div>',unsafe_allow_html=True)
-        st.markdown(f"**\U0001f4a1 Conseil\u00a0:** {co_msg}")
+        lb,cs,co_msg=MP[cl]
 
-        if cl in [1,2,3]:
-            with st.expander("\U0001f6e0\ufe0f Comment purifier cette eau\u00a0?"):
-                for titre_c,desc_c in [
-                    ("\U0001f525 1. \u00c9bullition","Porter l\u2019eau \u00e0 \u00e9bullition pendant au moins 5\u00a0minutes. Laisser refroidir dans un r\u00e9cipient propre et couvert. Efficace contre les bact\u00e9ries, les virus et les parasites."),
-                    ("\U0001f9f4 2. Filtration sur sable et gravier","Couches successives\u00a0: gravier grossier, gravier fin, sable grossier, sable fin, charbon de bois actif. Compl\u00e9ter obligatoirement avec l\u2019\u00e9bullition."),
-                    ("\u2600\ufe0f 3. D\u00e9sinfection solaire SODIS","Bouteilles transparentes expos\u00e9es 6\u00a0heures au soleil (ciel clair) ou 2\u00a0jours (nuageux). M\u00e9thode gratuite et valid\u00e9e par l\u2019OMS."),
-                    ("\U0001f9ea 4. Chloration","2\u00a0gouttes d\u2019eau de Javel \u00e0 5\u00a0% par litre d\u2019eau trouble (1\u00a0goutte si claire). Attendre 30\u00a0minutes avant de consommer."),
-                    ("\U0001f331 5. Graines de Moringa oleifera","Broyer 2\u00a03\u00a0graines s\u00e8ches en poudre fine. Ajouter \u00e0 1\u00a0litre d\u2019eau turbide, agiter 1\u00a0minute puis 5\u00a0minutes lentement. D\u00e9canter 1\u00a0heure.")
-                ]:
-                    st.markdown(f'<div class="conseil-box"><span class="conseil-title">{titre_c}</span><span class="conseil-item">{desc_c}</span></div>',unsafe_allow_html=True)
-
-        # ── RAPPORT PDF ───────────────────────────────────────
-        st.markdown("---")
-        st.markdown("### \U0001f4c4 Rapport officiel PDF")
+        # CORRECTION 2 : stocker résultat + PDF dans session_state
+        st.session_state.analyse_faite = True
+        st.session_state.dernier_resultat = {
+            "lb": lb, "cs": cs, "co_msg": co_msg,
+            "cl": int(cl), "pr": list(pr),
+            "conf": round(pr[cl]*100,1),
+            "mesures": {"pH":pH,"turb":tu,"temp":te,"cond":co,"no3":no,"o2":o2,"ecoli":ec},
+            "analyste": analyste, "lieu": lieu, "source": source,
+            "lat": lat_input, "lon": lon_input,
+        }
+        # Générer le PDF et le stocker
         try:
-            mesures={"pH":pH,"turb":tu,"temp":te,"cond":co,"no3":no,"o2":o2,"ecoli":ec}
-            heure_locale=datetime.now().strftime("%H:%M")
-            pdf_bytes=generer_pdf(mesures,cl,list(pr),analyste=analyste,lieu=lieu,source=source,heure_locale=heure_locale)
-            nom_pdf="rapport_eauvie_"+datetime.now().strftime("%Y%m%d_%H%M%S")+".pdf"
-            st.download_button(label="\U0001f4e5 T\u00e9l\u00e9charger le rapport PDF officiel",data=pdf_bytes,file_name=nom_pdf,mime="application/pdf")
-            st.success("\u2705 Rapport PDF g\u00e9n\u00e9r\u00e9 avec succ\u00e8s\u00a0!")
+            pdf_bytes=generer_pdf(
+                {"pH":pH,"turb":tu,"temp":te,"cond":co,"no3":no,"o2":o2,"ecoli":ec},
+                cl, list(pr), analyste=analyste, lieu=lieu, source=source)
+            st.session_state.dernier_pdf = pdf_bytes
+            st.session_state.dernier_pdf_nom = "rapport_eauvie_"+datetime.now().strftime("%Y%m%d_%H%M%S")+".pdf"
         except Exception as e:
-            st.error("Erreur PDF\u00a0: "+str(e))
+            st.session_state.dernier_pdf = None
+            st.error("Erreur g\u00e9n\u00e9ration PDF\u00a0: "+str(e))
 
-        # ── CARTOGRAPHIE ──────────────────────────────────────
-        st.markdown("---")
-        st.markdown('<div class="carto-box">\U0001f30d <b>Cartographie communautaire</b><br>Si votre mesure est r\u00e9elle, vous pouvez l\u2019ajouter \u00e0 la cartographie afin de faciliter les d\u00e9cisions des autorit\u00e9s, des ONG et autres acteurs en mati\u00e8re de l\u2019eau.</div>',unsafe_allow_html=True)
-        ajouter_carto = st.checkbox("\U0001f4cd Ajouter cette mesure \u00e0 la cartographie communautaire")
-        if ajouter_carto:
-            point = {
-                "lat": lat_input, "lon": lon_input,
-                "lieu": lieu, "source": source,
-                "resultat": lb, "classe": int(cl),
-                "analyste": analyste,
-                "date": datetime.now().strftime("%d/%m/%Y"),
-                "heure": datetime.now().strftime("%H:%M"),
-                "pH": pH, "turbidite": tu, "temperature": te,
-                "conductivite": co, "nitrates": no, "o2": o2, "ecoli": ec
-            }
-            st.session_state[CARTO_KEY].append(point)
-            st.success(f"\u2705 Mesure ajout\u00e9e \u00e0 la cartographie ({len(st.session_state[CARTO_KEY])} point(s) enregistr\u00e9(s) dans cette session).")
+        # Historique
+        st.session_state.histo.append({
+            "Heure":datetime.now().strftime("%H:%M:%S"),
+            "Analyste":analyste,"Lieu":lieu,"Source":source,
+            "pH":pH,"Turb.":tu,"Temp.(\u00b0C)":te,"Cond.":co,
+            "NO3":no,"O2 dissous":o2,"E.coli":ec,"R\u00e9sultat":lb
+        })
 
-        # Graphique probabilités
-        prd=pd.DataFrame({"Classe":["Potable","Douteuse","Pollu\u00e9e","Dangereuse"],"Probabilit\u00e9 (%)":[round(p*100,1) for p in pr]})
-        st.bar_chart(prd.set_index("Classe"))
+# ── AFFICHAGE RÉSULTAT (HORS BLOC BUTTON = PERSISTANT) ────────
+if st.session_state.analyse_faite and st.session_state.dernier_resultat:
+    r = st.session_state.dernier_resultat
+    lb=r["lb"]; cs=r["cs"]; co_msg=r["co_msg"]
+    cl=r["cl"]; pr=r["pr"]; conf=r["conf"]
 
-        # Historique session
-        if "histo" not in st.session_state: st.session_state.histo=[]
-        st.session_state.histo.append({"Heure":datetime.now().strftime("%H:%M:%S"),"Analyste":analyste,"Lieu":lieu,"Source":source,"pH":pH,"Turb.":tu,"Temp.(\u00b0C)":te,"Cond.":co,"NO\u2083":no,"O\u2082 dissous":o2,"E.coli":ec,"R\u00e9sultat":lb})
+    st.markdown(f'<div class="result-box {cs}">{lb}<br><span style="font-size:14px;font-weight:600;">Confiance du mod\u00e8le\u00a0: {conf}\u00a0%</span></div>',unsafe_allow_html=True)
+    st.markdown(f"**\U0001f4a1 Conseil\u00a0:** {co_msg}")
 
-# ── HISTORIQUE SESSION ────────────────────────────────────────
-if "histo" in st.session_state and len(st.session_state.histo)>0:
+    if cl in [1,2,3]:
+        with st.expander("\U0001f6e0\ufe0f Comment purifier cette eau\u00a0?"):
+            for titre_c,desc_c in [("\U0001f525 1. \u00c9bullition","Porter l\u2019eau \u00e0 \u00e9bullition pendant au moins 5\u00a0minutes. Laisser refroidir dans un r\u00e9cipient propre et couvert."),("\U0001f9f4 2. Filtration sur sable et gravier","Couches\u00a0: gravier grossier, gravier fin, sable grossier, sable fin, charbon de bois actif. Compl\u00e9ter avec l\u2019\u00e9bullition."),("\u2600\ufe0f 3. D\u00e9sinfection solaire SODIS","Bouteilles transparentes expos\u00e9es 6\u00a0heures au soleil (ciel clair) ou 2\u00a0jours (nuageux). M\u00e9thode gratuite et valid\u00e9e par l\u2019OMS."),("\U0001f9ea 4. Chloration","2\u00a0gouttes d\u2019eau de Javel \u00e0 5\u00a0% par litre (1\u00a0goutte si claire). Attendre 30\u00a0minutes."),("\U0001f331 5. Graines de Moringa oleifera","Broyer 2 \u00e0 3\u00a0graines s\u00e8ches. Ajouter \u00e0 1\u00a0litre d\u2019eau turbide, agiter 1\u00a0min + 5\u00a0min lentement. D\u00e9canter 1\u00a0heure.")]:
+                st.markdown(f'<div class="conseil-box"><span class="conseil-title">{titre_c}</span><span class="conseil-item">{desc_c}</span></div>',unsafe_allow_html=True)
+
+    # CORRECTION 2 : Rapport PDF toujours disponible après analyse
+    st.markdown("---")
+    st.markdown('<div class="pdf-box">\U0001f4c4 <b>Rapport officiel PDF</b> \u2014 T\u00e9l\u00e9chargeable \u00e0 tout moment apr\u00e8s l\u2019analyse.</div>',unsafe_allow_html=True)
+    if st.session_state.dernier_pdf:
+        st.download_button(
+            label="\U0001f4e5 T\u00e9l\u00e9charger le rapport PDF officiel",
+            data=st.session_state.dernier_pdf,
+            file_name=st.session_state.dernier_pdf_nom,
+            mime="application/pdf",
+            key="dl_pdf_main"
+        )
+        st.success("\u2705 Rapport PDF pr\u00eat au t\u00e9l\u00e9chargement.")
+    else:
+        st.warning("\u26a0\ufe0f Le rapport PDF n\u2019a pas pu \u00eatre g\u00e9n\u00e9r\u00e9.")
+
+    # Graphique
+    prd=pd.DataFrame({"Classe":["Potable","Douteuse","Pollu\u00e9e","Dangereuse"],"Probabilit\u00e9 (%)":[round(p*100,1) for p in pr]})
+    st.bar_chart(prd.set_index("Classe"))
+
+    # CORRECTION 1 : Cartographie — proposer l'ajout HORS du bloc button
+    st.markdown("---")
+    st.markdown('<div class="carto-box">\U0001f30d <b>Cartographie communautaire</b><br>Si votre mesure est r\u00e9elle, vous pouvez l\u2019ajouter \u00e0 la cartographie afin de faciliter les d\u00e9cisions des autorit\u00e9s, des ONG et autres acteurs en mati\u00e8re de l\u2019eau.</div>',unsafe_allow_html=True)
+
+    if st.button("\U0001f4cd Ajouter cette mesure \u00e0 la cartographie", key="btn_carto"):
+        point={
+            "lat": r["lat"], "lon": r["lon"],
+            "lieu": r["lieu"], "source": r["source"],
+            "resultat": r["lb"], "classe": r["cl"],
+            "analyste": r["analyste"],
+            "date": datetime.now().strftime("%d/%m/%Y"),
+            "heure": datetime.now().strftime("%H:%M"),
+            "pH": r["mesures"]["pH"], "turbidite": r["mesures"]["turb"],
+            "temperature": r["mesures"]["temp"], "conductivite": r["mesures"]["cond"],
+            "nitrates": r["mesures"]["no3"], "o2": r["mesures"]["o2"],
+            "ecoli": r["mesures"]["ecoli"]
+        }
+        st.session_state.carto_points.append(point)
+        st.success(f"\u2705 Mesure ajout\u00e9e \u00e0 la cartographie ({len(st.session_state.carto_points)} point(s) enregistr\u00e9(s)).")
+
+# ── HISTORIQUE ────────────────────────────────────────────────
+if len(st.session_state.histo) > 0:
     st.markdown("---")
     st.markdown('<span class="section-title">\U0001f554 Historique des analyses</span>',unsafe_allow_html=True)
     hdf=pd.DataFrame(st.session_state.histo)
     st.dataframe(hdf,use_container_width=True)
-    st.download_button("\u2b07\ufe0f T\u00e9l\u00e9charger le CSV",hdf.to_csv(index=False).encode("utf-8"),"historique_eauvie.csv","text/csv")
+    st.download_button("\u2b07\ufe0f T\u00e9l\u00e9charger le CSV",hdf.to_csv(index=False).encode("utf-8"),"historique_eauvie.csv","text/csv",key="dl_csv")
 
 # ── CARTOGRAPHIE ──────────────────────────────────────────────
 st.markdown("---")
 st.markdown('<span class="section-title">\U0001f5fa\ufe0f Cartographie des analyses</span>',unsafe_allow_html=True)
-mdp_carto = st.text_input("\U0001f512 Mot de passe pour acc\u00e9der \u00e0 la cartographie", type="password", placeholder="Saisir le mot de passe")
+mdp_carto=st.text_input("\U0001f512 Mot de passe pour acc\u00e9der \u00e0 la cartographie",type="password",placeholder="Saisir le mot de passe",key="mdp_input")
+
 if mdp_carto:
     if mdp_carto == "CARTOGRAPHIE":
-        points = st.session_state.get(CARTO_KEY, [])
-        if len(points) == 0:
-            st.info("\U0001f4cd Aucune mesure n\u2019a encore \u00e9t\u00e9 ajout\u00e9e \u00e0 la cartographie dans cette session.")
+        points=st.session_state.carto_points
+        nb=len(points)
+        # CORRECTION 1 : afficher même si 0 point avec message clair
+        st.success(f"\u2705 Acc\u00e8s autoris\u00e9. {nb} point(s) enregistr\u00e9(s) dans cette session.")
+        if nb == 0:
+            st.info("\U0001f4cd Aucune mesure n\u2019a encore \u00e9t\u00e9 ajout\u00e9e \u00e0 la cartographie. Effectuez une analyse et cliquez sur \u00ab Ajouter \u00e0 la cartographie \u00bb.")
         else:
-            st.success(f"\u2705 {len(points)} point(s) enregistr\u00e9(s) sur la carte.")
             try:
                 import folium
                 from streamlit_folium import st_folium
-                m = folium.Map(location=[6.3703,2.4305], zoom_start=7, tiles="CartoDB positron")
-                COULEURS_CARTO_MAP = {0:"green",1:"orange",2:"red",3:"darkred"}
-                ICONES_CARTO = {0:"tint",1:"exclamation-triangle",2:"times-circle",3:"skull-crossbones"}
+                # Centrer la carte sur le premier point
+                center_lat=sum(p["lat"] for p in points)/nb
+                center_lon=sum(p["lon"] for p in points)/nb
+                m=folium.Map(location=[center_lat,center_lon],zoom_start=8,tiles="CartoDB positron")
+                COUL={0:"green",1:"orange",2:"red",3:"darkred"}
                 for p in points:
-                    popup_html = f'''
-                    <div style='font-family:sans-serif;font-size:13px;min-width:200px;'>
+                    popup_html=f'''<div style='font-family:sans-serif;font-size:13px;min-width:200px;'>
                     <b style='color:#023e8a;font-size:15px;'>{p['resultat']}</b><br>
-                    <b>Lieu :</b> {p['lieu']}<br>
-                    <b>Source :</b> {p['source']}<br>
-                    <b>Analyste :</b> {p['analyste']}<br>
-                    <b>Date :</b> {p['date']} \u00e0 {p['heure']}<br>
-                    <hr style='margin:6px 0;'>
+                    <b>Lieu :</b> {p['lieu']}<br><b>Source :</b> {p['source']}<br>
+                    <b>Analyste :</b> {p['analyste']}<br><b>Date :</b> {p['date']} \u00e0 {p['heure']}<br>
+                    <hr style='margin:5px 0;'>
                     <b>pH :</b> {p['pH']} &nbsp; <b>Turb. :</b> {p['turbidite']} NTU<br>
                     <b>Temp. :</b> {p['temperature']} \u00b0C &nbsp; <b>Cond. :</b> {p['conductivite']} \u00b5S/cm<br>
-                    <b>NO\u2083 :</b> {p['nitrates']} mg/L &nbsp; <b>O\u2082 :</b> {p['o2']} mg/L<br>
-                    <b>E. coli :</b> {p['ecoli']} UFC/100\u00a0mL
-                    </div>'''
+                    <b>NO3 :</b> {p['nitrates']} mg/L &nbsp; <b>O2 :</b> {p['o2']} mg/L<br>
+                    <b>E. coli :</b> {p['ecoli']} UFC/100\u00a0mL</div>'''
                     folium.Marker(
-                        location=[p["lat"], p["lon"]],
-                        popup=folium.Popup(popup_html, max_width=280),
+                        location=[p["lat"],p["lon"]],
+                        popup=folium.Popup(popup_html,max_width=280),
                         tooltip=f"{p['resultat']} \u2014 {p['lieu']}",
-                        icon=folium.Icon(color=COULEURS_CARTO_MAP.get(p["classe"],"blue"),
-                                         icon="info-sign", prefix="glyphicon")
+                        icon=folium.Icon(color=COUL.get(p["classe"],"blue"),icon="info-sign",prefix="glyphicon")
                     ).add_to(m)
-                st_folium(m, width=700, height=450)
-                # Export JSON
-                df_carto = pd.DataFrame(points)
-                st.dataframe(df_carto, use_container_width=True)
-                st.download_button("\u2b07\ufe0f Exporter la cartographie (CSV)",
-                    df_carto.to_csv(index=False).encode("utf-8"),
-                    "cartographie_eauvie.csv","text/csv")
-                json_str = json.dumps({"points":points},ensure_ascii=False,indent=2)
-                st.download_button("\u2b07\ufe0f Exporter la cartographie (JSON)",
-                    json_str.encode("utf-8"),
-                    "cartographie_eauvie.json","application/json")
+                st_folium(m,width=700,height=450)
+                df_carto=pd.DataFrame(points)
+                st.dataframe(df_carto,use_container_width=True)
+                ca,cb=st.columns(2)
+                ca.download_button("\u2b07\ufe0f Exporter CSV",df_carto.to_csv(index=False).encode("utf-8"),"cartographie_eauvie.csv","text/csv",key="dl_carto_csv")
+                cb.download_button("\u2b07\ufe0f Exporter JSON",json.dumps({"points":points},ensure_ascii=False,indent=2).encode("utf-8"),"cartographie_eauvie.json","application/json",key="dl_carto_json")
             except ImportError:
-                st.warning("\u26a0\ufe0f La biblioth\u00e8que folium n\u2019est pas disponible. Voici les donn\u00e9es tabulaires.")
+                st.warning("\u26a0\ufe0f Folium non disponible. Donn\u00e9es tabulaires :")
                 st.dataframe(pd.DataFrame(points),use_container_width=True)
     else:
         st.error("\u274c Mot de passe incorrect.")
 
-# ── CONTACT DÉVELOPPEUR ───────────────────────────────────────
+# ── CONTACT ───────────────────────────────────────────────────
 st.markdown("---")
 st.markdown('<span class="section-title">\U0001f4e7 Contacter le d\u00e9veloppeur</span>',unsafe_allow_html=True)
-st.markdown("""
-<div class="contact-box">
+st.markdown("""<div style="background:linear-gradient(135deg,#023e8a,#0077b6);border-radius:14px;padding:20px;text-align:center;margin-top:10px;">
   <div style="color:#ffffff;font-size:16px;font-weight:800;margin-bottom:8px;">\U0001f4e7 Charles MEDEZOUNDJI</div>
-  <div style="color:#d0eeff;font-size:13px;margin-bottom:14px;">D\u00e9veloppeur de l\u2019application EauVie \u2014 B\u00e9nin, Afrique de l\u2019Ouest</div>
+  <div style="color:#d0eeff;font-size:13px;margin-bottom:16px;">D\u00e9veloppeur d\u2019EauVie \u2014 B\u00e9nin, Afrique de l\u2019Ouest</div>
   <a href="mailto:charlesezechielmedezoundji@gmail.com?subject=EauVie%20-%20Message&body=Bonjour%20Charles%2C%0A%0AJe%20vous%20contacte%20au%20sujet%20de%20l'application%20EauVie.%0A%0A"
      target="_blank"
-     style="display:inline-block;background:white;color:#023e8a;font-weight:800;font-size:15px;padding:12px 28px;border-radius:10px;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,0.2);">
+     style="display:inline-block;background:white;color:#023e8a;font-weight:800;font-size:15px;padding:12px 30px;border-radius:10px;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,0.2);">
     \U0001f4e4 Envoyer un message
   </a>
-  <div style="color:#a8d8ff;font-size:11px;margin-top:10px;">charlesezechielmedezoundji@gmail.com</div>
-</div>
-""", unsafe_allow_html=True)
+  <div style="color:#a8d8ff;font-size:11px;margin-top:12px;">charlesezechielmedezoundji@gmail.com</div>
+</div>""", unsafe_allow_html=True)
 
-# Footer
 st.markdown("---")
-st.markdown('<div style="text-align:center;color:#023e8a !important;font-size:12px;padding:10px;font-weight:600;">\U0001f4a7 EauVie \u2014 Random Forest \u2014 Normes OMS \u2014 7 param\u00e8tres \u2014 Charles MEDEZOUNDJI</div>',unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#023e8a !important;font-size:12px;padding:10px;font-weight:600;">\U0001f4a7 EauVie \u2014 Random Forest \u2014 Normes OMS \u2014 7 param\u00e8tres \u2014 Charles MEDEZOUNDJI \u2014 2026</div>',unsafe_allow_html=True)
