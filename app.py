@@ -649,7 +649,7 @@ elif module == "agricole":
     # Calcul automatique SAR
     na_val=na_ea or 45.0; ca_val=ca_ea or 60.0; mg_val=mg_ea or 18.0
     sar_calc=round(na_val/np.sqrt((ca_val+mg_val)/2),2)
-    st.markdown(f'<div style="background:#fff3e0;border-left:5px solid #e65100;border-radius:10px;padding:10px 14px;margin:8px 0;">📊 <b>SAR calculé automatiquement</b> = Na / √((Ca + Mg)/2) = <b>{sar_calc}</b> {'✅ < 3 : Bonne aptitude' if sar_calc<3 else ('⚠️ 3–9 : Modéré' if sar_calc<9 else ('❌ 9–18 : Risque' if sar_calc<18 else '☠️ > 18 : Inadapté'))}</div>',unsafe_allow_html=True)
+    st.markdown(f"""<div style="background:#fff3e0;border-left:5px solid #e65100;border-radius:10px;padding:10px 14px;margin:8px 0;">📊 <b>SAR calculé automatiquement</b> = Na / √((Ca + Mg)/2) = <b>{sar_calc}</b> {'✅ < 3 : Bonne aptitude' if sar_calc<3 else ('⚠️ 3–9 : Modéré' if sar_calc<9 else ('❌ 9–18 : Risque' if sar_calc<18 else '☠️ > 18 : Inadapté'))}</div>""",unsafe_allow_html=True)
     st.markdown('</div>',unsafe_allow_html=True)
 
     feat_ea={'Conductivite':cond_ea,'pH':ph_ea or 7.0,'Sodium':na_val,'Nitrates':no3_ea or 5.0,'Calcium':ca_val,'Magnesium':mg_val,'SAR':sar_calc}
