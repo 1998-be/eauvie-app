@@ -474,7 +474,7 @@ if module == "potable":
 # MODULE 2 : EAUX USÉES
 # ══════════════════════════════════════════════════════════════
 elif module == "usee":
-    st.markdown('<div class="header-box header-usee"><div class="header-title">🏭 EauVie — Eaux Usées & Industrielles</div><div class="header-sub">Analyse intelligente des eaux usées pour une gestion saine et responsable</div><div class="header-author">Proposée par Charles MEDEZOUNDJI · Arrêté Bénin 2001-294 · OMS 2006 · Directive 91/271/CEE</div></div>',unsafe_allow_html=True)
+    st.markdown("""<div class="header-box header-usee"><div class="header-title">🏭 EauVie — Eaux Usées & Industrielles</div><div class="header-sub">Analyse intelligente des eaux usées pour une gestion saine et responsable</div><div class="header-author">Proposée par Charles MEDEZOUNDJI · Arrêté Bénin 2001-294 · OMS 2006 · Directive 91/271/CEE</div></div>""",unsafe_allow_html=True)
 
     LABELS_EU=["CONFORME AU REJET","LIMITE","NON CONFORME","TRÈS POLLUÉE"]
     CSS_EU=["conforme","limite","non-conforme","tres-polluee"]
@@ -547,7 +547,7 @@ elif module == "usee":
 # MODULE 3 : EAUX NATURELLES
 # ══════════════════════════════════════════════════════════════
 elif module == "naturelle":
-    st.markdown('<div class="header-box header-naturelle"><div class="header-title">🌿 EauVie — Eaux Naturelles & Écologiques</div><div class="header-sub">Analyse intelligente des eaux naturelles pour une écologie stable et durable</div><div class="header-author">Proposée par Charles MEDEZOUNDJI · DCE 2000/60/CE · IBGN · Imorou Toko 2010</div></div>',unsafe_allow_html=True)
+    st.markdown("""<div class="header-box header-naturelle"><div class="header-title">🌿 EauVie — Eaux Naturelles & Écologiques</div><div class="header-sub">Analyse intelligente des eaux naturelles pour une écologie stable et durable</div><div class="header-author">Proposée par Charles MEDEZOUNDJI · DCE 2000/60/CE · IBGN · Imorou Toko 2010</div></div>""",unsafe_allow_html=True)
 
     LABELS_EN=["BONNE QUALITÉ","QUALITÉ MOYENNE","MAUVAISE QUALITÉ","TRÈS MAUVAISE QUALITÉ"]
     CSS_EN=["bonne","moyenne","mauvaise","tres-mauvaise"]
@@ -616,7 +616,7 @@ elif module == "naturelle":
 # MODULE 4 : EAU AGRICOLE
 # ══════════════════════════════════════════════════════════════
 elif module == "agricole":
-    st.markdown('<div class="header-box header-agricole"><div class="header-title">🌾 EauVie — Eau Agricole & Irrigation</div><div class="header-sub">Analyse intelligente de l'eau agricole pour une agriculture rentable et saine</div><div class="header-author">Proposée par Charles MEDEZOUNDJI · Normes FAO 1994 · SODAGRI Bénin · Mama 2011</div></div>',unsafe_allow_html=True)
+    st.markdown("""<div class="header-box header-agricole"><div class="header-title">🌾 EauVie — Eau Agricole & Irrigation</div><div class="header-sub">Analyse intelligente de l'eau agricole pour une agriculture rentable et saine</div><div class="header-author">Proposée par Charles MEDEZOUNDJI · Normes FAO 1994 · SODAGRI Bénin · Mama 2011</div></div>""",unsafe_allow_html=True)
 
     LABELS_EA=["BONNE APTITUDE","APTITUDE MODÉRÉE","EAU À RISQUE","EAU INADAPTÉE"]
     CSS_EA=["aptitude-bonne","aptitude-moderee","risque","inadaptee"]
