@@ -420,7 +420,7 @@ if module == "potable":
     if no3 is not None and no2 is not None and nh4 is not None:
         pi=round(no3+no2*10+nh4,2)
         ni="✅ Faible" if pi<10 else ("⚠️ Modéré" if pi<50 else ("❌ Élevé" if pi<150 else "☠️ Critique"))
-        st.markdown(f'<div style="background:#ede7f6;border-left:5px solid #5e35b1;border-radius:10px;padding:10px 14px;margin:8px 0;">📊 <b>Indice pollution chimique</b> (NO₃ + NO₂×10 + NH₄) = <b>{pi}</b> → {ni}</div>',unsafe_allow_html=True)
+        st.markdown(f"""<div style="background:#ede7f6;border-left:5px solid #5e35b1;border-radius:10px;padding:10px 14px;margin:8px 0;">📊 <b>Indice pollution chimique</b> (NO₃ + NO₂×10 + NH₄) = <b>{pi}</b> → {ni}</div>""",unsafe_allow_html=True)
 
     st.markdown("---")
     if st.button("🔍 Analyser la qualité de l'eau potable", key="btn_potable"):
