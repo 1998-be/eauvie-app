@@ -678,7 +678,7 @@ elif module == "agricole":
     if st.session_state.analyse_faite and st.session_state.dernier_resultat and st.session_state.dernier_resultat.get("module")=="agricole":
         r=st.session_state.dernier_resultat
         afficher_resultat(r["lbl_final"],r["cs"],r["conf"],r["pr"],LABELS_EA,r["conseil"],r["cl"],methodes=r.get("methodes",[]))
-        st.markdown(f'<div style="background:#fff3e0;border-left:5px solid #e65100;border-radius:10px;padding:10px 14px;margin:8px 0;">📊 <b>SAR de l'échantillon :</b> {r.get("sar","—")} — {"✅ Bonne aptitude" if r.get("sar",99)<3 else ("⚠️ Modéré" if r.get("sar",99)<9 else ("❌ Risque" if r.get("sar",99)<18 else "☠️ Inadapté"))}</div>',unsafe_allow_html=True)
+        st.markdown(f"""<div style="background:#fff3e0;border-left:5px solid #e65100;border-radius:10px;padding:10px 14px;margin:8px 0;">📊 <b>SAR de l'échantillon :</b> {r.get("sar","—")} — {"✅ Bonne aptitude" if r.get("sar",99)<3 else ("⚠️ Modéré" if r.get("sar",99)<9 else ("❌ Risque" if r.get("sar",99)<18 else "☠️ Inadapté"))}</div>""",unsafe_allow_html=True)
         st.markdown('<div class="pdf-box">📄 <b>Rapport PDF — Eau agricole</b></div>',unsafe_allow_html=True)
         if st.session_state.dernier_pdf:
             st.download_button("📥 Télécharger le rapport PDF",data=st.session_state.dernier_pdf,file_name=st.session_state.dernier_pdf_nom,mime="application/pdf",key="dl_pdf_ea")
