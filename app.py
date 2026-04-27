@@ -55,7 +55,7 @@ def S(name, **kw):
 
 def statut_param(val, pmin, pmax, inverse=False):
     if val is None:
-        return "Non mesure", colors.HexColor("#9e9e9e")
+        return "Non mesuré", colors.HexColor("#9e9e9e")
     if inverse:
         if val <= pmax:
             return "Conforme", VT
@@ -87,7 +87,7 @@ def evaluer_sous_reserve(vals, cl):
     labels = ["POTABLE", "DOUTEUSE", "POLLUÉE", "DANGEREUSE"]
     label = labels[cl]
     if sous_reserve:
-        label = "POTABLE (sous reserve des mesures a completer)"
+        label = "POTABLE — sous réserve des mesures manquantes"
     return label, sous_reserve, manquants
 
 
@@ -773,7 +773,7 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
             width="100%", thickness=0.4, color=GM, spaceAfter=5))
 
     # SECTION 1 - Contexte et problematique
-    ts("1.  CONTEXTE ET PROBLEMATIQUE")
+    ts("1.  CONTEXTE ET PROBLÉMATIQUE")
     story.append(Paragraph(ctx["chiffres"], sb))
     story.append(Spacer(1, 0.15 * cm))
     story.append(Paragraph(ctx["problematique"], sb))
@@ -785,9 +785,9 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     story.append(Spacer(1, 0.2 * cm))
 
     # SECTION 3 - Informations sur l'echantillon
-    ts("3.  INFORMATIONS SUR L'ECHANTILLON")
+    ts("3.  INFORMATIONS SUR L’ÉCHANTILLON")
     info = [
-        ["Reference", ref_str],
+        ["Référence du rapport", ref_str],
         ["Date / Heure", date_str + " - " + heure_str],
         ["Analyste", analyste or "Non renseigne"],
         ["Lieu", lieu or "Non renseigne"],
@@ -809,12 +809,12 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     story.append(Spacer(1, 0.3 * cm))
 
     # SECTION 4 - Mesures analysees
-    ts("4.  MESURES ANALYSEES")
+    ts("4.  MESURES ANALYSÉES")
     mh = [
         Paragraph("<b>" + t + "</b>",
                   S("mh", fontName="Helvetica-Bold", fontSize=8,
                     textColor=WH, alignment=TA_CENTER))
-        for t in ["Parametre", "Valeur moyenne", "Norme", "Statut"]
+        for t in ["Paramètre", "Valeur mesurée", "Norme de référence", "Statut"]
     ]
     mrows = [mh]
     for nom, val, nr, (st_txt, cu) in params_aff:
@@ -825,7 +825,7 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
             Paragraph("<b>" + val + "</b>",
                       S("mc2", fontName="Helvetica-Bold", fontSize=9,
                         textColor=colors.HexColor("#9e9e9e")
-                        if val == "Non mesure" else NK,
+                        if val == "Non mesuré" else NK,
                         alignment=TA_CENTER)),
             Paragraph(nr, S("mc3", fontName="Helvetica", fontSize=8,
                              textColor=colors.HexColor("#555"),
@@ -849,7 +849,7 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     story.append(Spacer(1, 0.3 * cm))
 
     # SECTION 5 - Resultat IA
-    ts("5.  RESULTAT DE L'ANALYSE PAR INTELLIGENCE ARTIFICIELLE")
+    ts("5.  RÉSULTAT DE L’ANALYSE PAR INTELLIGENCE ARTIFICIELLE")
     ccls = [VT, OR, RG, RF]
     conf_val = round(probabilites[classe_pred] * 100, 1)
     res = Table(
@@ -898,8 +898,223 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     story.append(pt)
     story.append(Spacer(1, 0.3 * cm))
 
-    # SECTION 6 - Recommandations
-    ts("6.  INTERPRETATION ET RECOMMANDATIONS")
+    # SECTION 6 - Interpretation scientifique des parametres
+    ts("6.  INTERPRÉTATION SCIENTIFIQUE DES PARAMÈTRES MESURÉS")
+
+    # Dictionnaire des interpretations scientifiques par parametre
+    INTERPRETATIONS = {
+        "E. coli": (
+            "L\'E. coli est le marqueur microbiologique de référence de la "
+            "contamination fécale dans l\'eau. Sa présence, même en faible quantité, "
+            "indique que l\'eau a été en contact avec des matières fécales humaines "
+            "ou animales et peut contenir d\'autres agents pathogènes dangereux "
+            "(Vibrio cholerae, Salmonella, rotavirus). L\'OMS fixe un seuil zéro "
+            "pour l\'eau de boisson."
+        ),
+        "E. coli": (
+            "L\'E. coli est le marqueur microbiologique de référence de la "
+            "contamination fécale dans l\'eau. Sa présence indique que l\'eau a "
+            "été en contact avec des matières fécales et peut contenir d\'autres "
+            "agents pathogènes dangereux. L\'OMS exige zéro UFC/100 mL."
+        ),
+        "pH": (
+            "Le pH mesure l\'acidité ou la basicité de l\'eau. Un pH trop bas "
+            "favorise la dissolution des métaux lourds (plomb, cadmium, arsenic) "
+            "dans les canalisations. Un pH trop élevé indique une contamination "
+            "chimique ou minérale et réduit l\'efficacité du chlore. La plage "
+            "OMS de 6,5 à 8,5 garantit la sécurité et le bon goût de l\'eau."
+        ),
+        "Turbidit\u00e9 (NTU)": (
+            "La turbidité mesure la présence de particules en suspension "
+            "(argile, matières organiques, micro-organismes). Une eau turbide "
+            "protège les bactéries de la désinfection, rendant la chloration "
+            "et l\'irradiation UV moins efficaces. Au-delà de 5 NTU, le risque "
+            "infectieux augmente significativement."
+        ),
+        "Temp\u00e9rature (\u00b0C)": (
+            "La température influence directement la prolifération des "
+            "micro-organismes pathogènes et la solubilisation de certains composés "
+            "chimiques. Au-delà de 25 °C, la vitesse de multiplication bactérienne "
+            "double toutes les 20 minutes. Elle conditionne également la teneur "
+            "en oxygène dissous et le goût de l\'eau."
+        ),
+        "Conductivit\u00e9 (\u00b5S/cm)": (
+            "La conductivité mesure la capacité de l\'eau à conduire le courant "
+            "électrique, directement proportionnelle à sa teneur en sels et "
+            "minéraux dissous. Une conductivité élevée peut indiquer une "
+            "intrusion saline, une pollution industrielle ou une minéralisation "
+            "excessive pouvant affecter les reins à long terme."
+        ),
+        "Oxyg\u00e8ne dissous (mg/L)": (
+            "L\'oxygène dissous est indispensable aux processus "
+            "d\'auto-épuration naturelle de l\'eau. Un taux faible indique "
+            "une décomposition organique intense et peut favoriser la "
+            "prolifération de bactéries anérobies productrices de toxines. "
+            "En dessous de 2 mg/L, l\'eau est anoxique et dangereuse."
+        ),
+        "Nitrates (mg/L)": (
+            "Les nitrates proviennent principalement des engrais agricoles "
+            "et du lessivage des sols. Au-delà de 50 mg/L, ils provoquent "
+            "la méthémoglobinémie (« syndrome du nourrisson bleu »), "
+            "potentiellement mortelle chez les bébés de moins de 3 mois. "
+            "Des études récentes suggèrent également un lien avec "
+            "certains cancers digestifs chez l\'adulte."
+        ),
+        "Nitrites (mg/L)": (
+            "Les nitrites sont des intermédiaires de la nitrification "
+            "bactérienne, indicateurs d\'une contamination organique récente "
+            "et active. Ils sont plus toxiques que les nitrates à concentration "
+            "égale et se combinent aux amines pour former des nitrosamines "
+            "cancérogènes. Leur présence témoigne d\'une dégradation en cours."
+        ),
+        "Ammonium (mg/L)": (
+            "L\'ammonium résulte de la dégradation des matières organiques "
+            "azotées et constitue un indicateur précoce de contamination fécale "
+            "ou industrielle. Il signale la présence possible de pathogènes "
+            "et d\'autres polluants azotés. Sa présence dans les eaux "
+            "souterraines est particulièrement préoccupante."
+        ),
+        "Plomb (mg/L)": (
+            "Le plomb est un métal lourd neurotoxique sans seuil sûr connu. "
+            "Il provient des vieilles canalisations, des soudures et de "
+            "certaines activités industrielles. Chez l\'enfant, même de très "
+            "faibles doses entraînent des troubles du développement cogénitif "
+            "irréversibles. L\'OMS a abaissé son seuil de 50 à 10 µg/L en 2011, "
+            "car aucune dose n\'est considérée comme sans effet."
+        ),
+        "Chlore r\u00e9siduel (mg/L)": (
+            "Le chlore résiduel garantit la désinfection continue de l\'eau "
+            "depuis la station de traitement jusqu\'au robinet du consommateur. "
+            "Un taux insuffisant expose au risque de recontamination dans "
+            "le réseau. Un taux excessif génère des sous-produits de "
+            "chloration (trihalomeéthanes) présentant un risque cancérogène "
+            "à long terme."
+        ),
+        "DBO\u2085 (mg/L)": (
+            "La DBO\u2085 mesure la quantité d\'oxygène consommée par les "
+            "bactéries pour dégrader la matière organique en 5 jours à 20 °C. "
+            "Elle représente la charge en matières organiques biodégradables "
+            "de l\'effluent. Plus la DBO\u2085 est élevée, plus l\'effluent est "
+            "polluant pour le milieu récepteur."
+        ),
+        "DCO (mg/L)": (
+            "La DCO mesure l\'ensemble des matières oxydables, biodégradables "
+            "ou non. Le rapport DCO/DBO\u2085 indique la biodégradabilité de "
+            "l\'effluent. Un rapport supérieur à 3 signale la présence de "
+            "composés récalcitrants (métaux, détergents, solvants) difficiles "
+            "à éliminer par voie biologique."
+        ),
+        "MES (mg/L)": (
+            "Les matières en suspension représentent les particules solides "
+            "non dissoutes dans l\'eau. Elles transportent des polluants "
+            "adsorbés (métaux lourds, pesticides), colmatent les lits des "
+            "cours d\'eau et réduisent la lumière disponible pour les plantes "
+            "aquatiques. Leur sédimentation crée des zones anoxiques."
+        ),
+        "NH\u2084 (mg/L)": (
+            "L\'ammonium dans les eaux usées provient essentiellement "
+            "de la dégradation des protéines et de l\'urée. Il est "
+            "directement toxique pour les poissons (perturbation des échanges "
+            "respiratoires branchiaux) et stimule la croissance des algues. "
+            "Son oxydation en nitrate consomme l\'oxygène du milieu récepteur."
+        ),
+        "Sodium Na (mg/L)": (
+            "Le sodium en excès dans l\'eau d\'irrigation disperse les argiles "
+            "du sol, détruisant sa structure et réduisant drastiquement sa "
+            "perméabilité à l\'eau et à l\'air. C\'est le principal facteur "
+            "de sodicisation des sols, un phénomène largement irréversible "
+            "à l\'échelle humaine et responsable de millions d\'hectares "
+            "de terres dégradées dans le monde."
+        ),
+        "Calcium Ca (mg/L)": (
+            "Le calcium est l\'antagoniste naturel du sodium dans le sol. "
+            "Il stabilise les argiles, favorise la formation d\'agrégats "
+            "et maintient la structure poreuse du sol indispensable aux "
+            "échanges eau-racines. Une carence en calcium favorise "
+            "la sodicisation et la compaction des sols irrigués."
+        ),
+        "Magn\u00e9sium Mg (mg/L)": (
+            "Le magnésium est le cofacteur central de la chlorophylle. "
+            "Il intervient dans la photosynthèse, le métabolisme énergétique "
+            "et le transport des phosphates dans la plante. Une carence "
+            "se manifeste par une chlorose internervale caractéristique "
+            "et une chute significative du rendement agricole."
+        ),
+        "SAR": (
+            "Le SAR (Sodium Adsorption Ratio) est l\'indicateur FAO de référence "
+            "pour évaluer le risque de sodicisation d\'un sol par l\'eau "
+            "d\'irrigation. Il exprime le rapport entre le sodium et la racine "
+            "carrée de la moyenne des cations bivalents (calcium + magnésium). "
+            "Un SAR élevé prédit une dégradation progressive et irréversible "
+            "de la structure du sol en cas d\'irrigation répétée."
+        ),
+    }
+
+    # Generer les lignes d'interpretation
+    interp_rows_data = []
+    for nom, val, nr, (st_txt, cu) in params_aff:
+        if val == "Non mesuré":
+            continue
+        # Chercher l'interpretation par correspondance partielle du nom
+        interp_text = None
+        for key, txt in INTERPRETATIONS.items():
+            if key in nom or nom.startswith(key[:6]):
+                interp_text = txt
+                break
+        if interp_text is None:
+            continue
+        interp_rows_data.append((nom, val, st_txt, cu, interp_text))
+
+    if interp_rows_data:
+        # Tableau d'interpretation
+        interp_header = [
+            Paragraph("<b>Param\u00e8tre</b>",
+                      S("ih", fontName="Helvetica-Bold", fontSize=8,
+                        textColor=WH, alignment=TA_CENTER)),
+            Paragraph("<b>Valeur</b>",
+                      S("ih", fontName="Helvetica-Bold", fontSize=8,
+                        textColor=WH, alignment=TA_CENTER)),
+            Paragraph("<b>Statut</b>",
+                      S("ih", fontName="Helvetica-Bold", fontSize=8,
+                        textColor=WH, alignment=TA_CENTER)),
+            Paragraph("<b>Interpr\u00e9tation scientifique</b>",
+                      S("ih", fontName="Helvetica-Bold", fontSize=8,
+                        textColor=WH, alignment=TA_CENTER)),
+        ]
+        interp_rows = [interp_header]
+        for nom_i, val_i, st_i, cu_i, txt_i in interp_rows_data:
+            interp_rows.append([
+                Paragraph("<b>" + nom_i + "</b>",
+                          S("ic1", fontName="Helvetica-Bold", fontSize=7.5,
+                            textColor=BF, alignment=TA_LEFT)),
+                Paragraph(val_i,
+                          S("ic2", fontName="Helvetica-Bold", fontSize=7.5,
+                            textColor=NK, alignment=TA_CENTER)),
+                Paragraph("<b>" + st_i + "</b>",
+                          S("ic3", fontName="Helvetica-Bold", fontSize=7.5,
+                            textColor=cu_i, alignment=TA_CENTER)),
+                Paragraph(txt_i,
+                          S("ic4", fontName="Helvetica", fontSize=7,
+                            textColor=NK, alignment=TA_JUSTIFY, leading=10)),
+            ])
+        it2 = Table(interp_rows,
+                    colWidths=[3.2 * cm, 2.5 * cm, 2.2 * cm,
+                               W - 3.6 * cm - 3.2 * cm - 2.5 * cm - 2.2 * cm])
+        it2.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, 0), BM),
+            ("GRID",          (0, 0), (-1, -1), 0.4, GM),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WH, BP]),
+            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
+        ]))
+        story.append(it2)
+    story.append(Spacer(1, 0.35 * cm))
+
+    # SECTION 7 - Recommandations
+    ts("7.  RECOMMANDATIONS ET MESURES À PRENDRE")
     at = Table(
         [[Paragraph(conseil_txt,
                     S("al", fontName="Helvetica-Bold", fontSize=9,
@@ -923,21 +1138,21 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
         ))
     story.append(Spacer(1, 0.3 * cm))
 
-    # SECTION 7 - Notes methodologiques
-    ts("7.  NOTES METHODOLOGIQUES")
+    # SECTION 8 - Notes methodologiques
+    ts("8.  NOTES MÉTHODOLOGIQUES")
     for i, n in enumerate([
-        "Ce rapport est genere automatiquement par EauVie. La décision est fondée "
-        "sur les parametres disponibles. La fiabilité dépend directement de la "
+        "Ce rapport est généré automatiquement par EauVie. La décision est fondée "
+        "sur les paramètres disponibles. La fiabilité dépend directement de la "
         "précision des mesures effectuées sur le terrain.",
-        "Sources des donnees d'entrainement : Mama et al. (2011), Imorou Toko "
+        "Sources des données d’entraînement : Mama et al. (2011), Imorou Toko "
         "et al. (2010), Boukari et al. (2003), Vodounnou et al. (2020), "
-        "SONEB bulletins qualite 2018-2022, FAO 1994 (Ayers & Westcot), "
+        "SONEB bulletins qualité 2018-2022, FAO 1994 (Ayers & Westcot), "
         "OMS 2006 et 2017, Directive 91/271/CEE, DCE 2000/60/CE, SODAGRI Benin, "
         "Direction Nationale de l'Hydraulique du Benin, USEPA 2022, "
-        "Norme beninoise NB 001/2001. Precision 100 % en validation croisee 5-fold.",
-        "Ce rapport ne se substitue pas à une analyse complète en laboratoire agréé. "
+        "Norme béninoise NB 001/2001. Précision 100 % en validation croisée 5‑fold.",
+        "Ce rapport ne se substitue pas à une analyse en laboratoire agréé. "
         "Pour une certification officielle de conformite, des tests complémentaires "
-        "en laboratoire sont recommandés.",
+        "en laboratoire agréé sont recommandées.",
     ], 1):
         story.append(Paragraph(
             "<b>Note " + str(i) + " :</b> " + n, sn))
@@ -949,8 +1164,8 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     ft = Table(
         [[
             Paragraph(
-                "<b>EauVie</b> - " + titre_mod + " - Benin<br/>"
-                "Charles MEDEZOUNDJI | Ref. " + ref_str,
+                "<b>EauVie</b> — " + titre_mod + "<br/>"
+                "Charles Ezéchiel MEDEZOUNDJI | Réf. " + ref_str,
                 S("ft1", fontName="Helvetica", fontSize=7,
                   textColor=colors.HexColor("#555"),
                   alignment=TA_LEFT, leading=10),
@@ -1097,7 +1312,7 @@ st.markdown(
     "<div style='text-align:center;font-size:22px;font-weight:800;"
     "color:#023e8a;margin-bottom:4px;'>EauVie</div>"
     "<div style='text-align:center;font-size:12px;color:#555;margin-bottom:14px;'>"
-    "Analyse intelligente de la qualite de l'eau - 4 modules - 100 % de precision"
+    "Analyse intelligente de la qualité de l’eau — 4 modules — 100 % de précision"
     "</div>",
     unsafe_allow_html=True,
 )
@@ -1158,9 +1373,9 @@ def bloc_analyste(sources_list):
     st.markdown('<span class="section-title">Analyste et prélèvement</span>',
                 unsafe_allow_html=True)
     a = st.text_input("Nom complet de l\'analyste *",
-                       placeholder="Ex : Jean KOFFI", key=f"analyste_{module}")
-    l = st.text_input("Lieu de prélèvement *",
-                       placeholder="Ex : Village de Kpanrou", key=f"lieu_{module}")
+                       placeholder="Ex : Jean KOFFI", key=f"analyste_{module}")
+    l = st.text_input("Lieu de prélèvement :",
+                       placeholder="Ex : Village de Kpanrôu, commune de Djougou", key=f"lieu_{module}")
     s = st.selectbox("Source *", sources_list, key=f"source_{module}")
     cg1, cg2 = st.columns(2)
     lat = cg1.number_input("Latitude", value=6.3703, step=0.0001,
@@ -1220,7 +1435,7 @@ def bloc_pdf_et_carto(r, key_pdf, key_carto, module_label):
             mime="application/pdf",
             key=key_pdf,
         )
-        st.success("Rapport PDF prêt.")
+        st.success("Le rapport PDF est prêt au téléchargement.")
     st.markdown('<div class="carto-box">Cartographie - Si mesure reelle, ajoutez-la a la carte communautaire.</div>',
                 unsafe_allow_html=True)
     if st.button("Ajoutér à la cartographie", key=key_carto):
@@ -1243,31 +1458,31 @@ if module == "potable":
     st.markdown(
         '<div class="header-box header-potable">'
         '<div class="header-title">EauVie — Eau potable et domestique</div>'
-        '<div class="header-sub">Analyse intelligente de l\'eau a boire ou domestique'
-        ' afin de garantir une consommation rassurante et bénéfique</div>'
+        '<div class="header-sub">Analyse intelligente de l\'eau à boire ou domestique'
+        ' — afin de garantir une consommation rassurante et bénéfique.</div>'
         '<div class="header-author">Charles Ezechiel MEDEZOUNDJI - Biologiste - Benin</div>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    with st.expander("Normes OMS - 11 parametres"):
+    with st.expander("Normes OMS — 11 paramètres"):
         st.markdown("""<table class="normes-table">
-<tr><th>Categorie</th><th>Parametre</th><th>Potable</th>
-    <th>Douteuse</th><th>Polluee</th><th>Dangereuse</th></tr>
+<tr><th>Catégorie</th><th>Paramètre</th><th>Potable</th>
+    <th>Douteuse</th><th>Polluée</th><th>Dangereuse</th></tr>
 <tr><td>Microbiologie</td><td>E. coli (UFC/100 mL)</td>
     <td>0</td><td>1-10</td><td>10-500</td><td>&gt;500</td></tr>
 <tr><td rowspan="5">Physico-chimique</td><td>pH</td>
     <td>6,5-8,5</td><td>5,5-9,0</td><td>4,5-5,5</td><td>&lt;4,5</td></tr>
-<tr><td>Turbidite (NTU)</td><td>&lt;5</td><td>5-10</td><td>10-50</td><td>&gt;50</td></tr>
-<tr><td>Temperature (deg C)</td><td>&lt;25</td><td>25-30</td><td>30-35</td><td>&gt;35</td></tr>
-<tr><td>Conductivite (uS/cm)</td><td>&lt;2 500</td><td>2 500-3 000</td><td>3 000-4 000</td><td>&gt;4 000</td></tr>
-<tr><td>Oxygene dissous (mg/L)</td><td>&gt;6</td><td>4-6</td><td>2-4</td><td>&lt;2</td></tr>
+<tr><td>Turbidité (NTU)</td><td>&lt;5</td><td>5-10</td><td>10-50</td><td>&gt;50</td></tr>
+<tr><td>Température (°C)</td><td>&lt;25</td><td>25-30</td><td>30-35</td><td>&gt;35</td></tr>
+<tr><td>Conductivité (µS/cm)</td><td>&lt;2 500</td><td>2 500-3 000</td><td>3 000-4 000</td><td>&gt;4 000</td></tr>
+<tr><td>Oxygène dissous (mg/L)</td><td>&gt;6</td><td>4-6</td><td>2-4</td><td>&lt;2</td></tr>
 <tr><td rowspan="5">Chimique</td><td>Nitrates (mg/L)</td>
     <td>&lt;50</td><td>50-80</td><td>80-150</td><td>&gt;150</td></tr>
 <tr><td>Nitrites (mg/L)</td><td>&lt;3</td><td>3-5</td><td>5-10</td><td>&gt;10</td></tr>
 <tr><td>Ammonium (mg/L)</td><td>&lt;1,5</td><td>1,5-3</td><td>3-5</td><td>&gt;5</td></tr>
 <tr><td>Plomb (mg/L)</td><td>&lt;0,01</td><td>0,01-0,02</td><td>0,02-0,05</td><td>&gt;0,05</td></tr>
-<tr><td>Chlore residuel (mg/L)</td><td>0,2-0,5</td><td>0,05-0,2</td><td>&lt;0,05</td><td>0</td></tr>
+<tr><td>Chlore résiduel (mg/L)</td><td>0,2-0,5</td><td>0,05-0,2</td><td>&lt;0,05</td><td>0</td></tr>
 </table>""", unsafe_allow_html=True)
         st.caption(
             "Sources : OMS 2017 - Norme beninoise NB 001/2001 - "
@@ -1275,41 +1490,41 @@ if module == "potable":
         )
 
     analyste, lieu, source, lat_i, lon_i = bloc_analyste([
-        "Robinet (reseau traite SONEB)", "Puits peu profond", "Forage profond",
-        "Riviere", "Fleuve / marigot", "Lac", "Eau stagnante (mare)",
+        "Robinet (réseau traité SONEB)", "Puits peu profond", "Forage profond",
+        "Rivière", "Fleuve ou marigot", "Lac", "Eau stagnante (mare)",
         "Eau de pluie", "Source naturelle", "Eau de barrage",
-        "Citerne stockee", "Autre",
+        "Citerne stockée", "Autre",
     ])
 
     st.markdown('<span class="section-title">Saisie des 11 paramètres - 3 categories</span>',
                 unsafe_allow_html=True)
-    st.info("Saisissez 3 mesures par paramètre. Cochez « Pas mesuré » si non disponible.")
+    st.info("Saisissez 3 mesures indépendantes par paramètre. Cochez « Pas mesuré » si le paramètre n’a pas été mesuré.")
 
     st.markdown('<div class="cat-box cat-micro">'
                 '<span class="cat-title cat-title-micro">Qualité microbiologique</span>',
                 unsafe_allow_html=True)
-    ecoli = triple("ecoli", "E. coli - Contamination fecale",
-                   "Toute presence = risque sanitaire direct.", "OMS : 0 UFC/100 mL",
+    ecoli = triple("ecoli", "E. coli — Contamination fécale",
+                   "Toute présence signifie un risque sanitaire direct.", "OMS : 0 UFC/100 mL",
                    0.0, 10000.0, 0.0, 1.0, "UFC/100 mL", True)
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="cat-box cat-physico">'
                 '<span class="cat-title cat-title-physico">Qualité physico-chimique</span>',
                 unsafe_allow_html=True)
-    pH_v = triple("pH_p", "pH - Acidite / Basicite",
-                   "pH bas : metaux toxiques. pH eleve : contamination chimique.",
-                   "OMS : 6,5 a 8,5", 0.0, 14.0, 7.0, 0.01, optionnel=True)
-    turb = triple("turb_p", "Turbidite (NTU)",
-                   "Eau trouble = pathogenes possibles.", "OMS : < 5 NTU",
+    pH_v = triple("pH_p", "pH — Acidité / Basicité",
+                   "pH bas : métaux toxiques. pH élevé : contamination chimique ou minérale.",
+                   "OMS : 6,5 à 8,5", 0.0, 14.0, 7.0, 0.01, optionnel=True)
+    turb = triple("turb_p", "Turbidité (NTU)",
+                   "Eau trouble : agents pathogènes possibles, désinfection moins efficace.", "OMS : < 5 NTU",
                    0.0, 200.0, 2.0, 0.01, "NTU", True)
-    temp = triple("temp_p", "Temperature (deg C)",
-                   "Au-dela de 25 deg C : proliferation microbienne acceleree.",
-                   "OMS : < 25 deg C", 0.0, 60.0, 27.0, 0.1, "deg C", True)
-    cond = triple("cond_p", "Conductivite (uS/cm)",
-                   "Sels excessifs : risques renaux a long terme.",
-                   "OMS : < 2 500 uS/cm", 0.0, 10000.0, 400.0, 1.0, "uS/cm", True)
-    o2_v = triple("o2_p", "Oxygene dissous (mg/L)",
-                   "Faible = decomposition organique.", "Norme : > 6 mg/L",
+    temp = triple("temp_p", "Température (°C)",
+                   "Au-delà de 25 °C, la prolifération des micro-organismes pathogènes s’accélère.",
+                   "OMS : inférieur à 25 °C", 0.0, 60.0, 27.0, 0.1, "deg C", True)
+    cond = triple("cond_p", "Conductivité (µS/cm)",
+                   "Sels excessifs : risques rénaux à long terme.",
+                   "OMS : inférieur à 2 500 µS/cm", 0.0, 10000.0, 400.0, 1.0, "uS/cm", True)
+    o2_v = triple("o2_p", "Oxygène dissous (mg/L)",
+                   "Taux faible : décomposition organique intense, bactéries anérobies.", "Norme : supérieur à 6 mg/L",
                    0.0, 14.0, 7.0, 0.01, "mg/L", True)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1317,19 +1532,19 @@ if module == "potable":
                 '<span class="cat-title cat-title-chimique">Qualité chimique</span>',
                 unsafe_allow_html=True)
     no3 = triple("no3_p", "Nitrates (mg/L)",
-                  "Pollution agricole. > 50 mg/L = methemoglobinemie.",
-                  "OMS : < 50 mg/L", 0.0, 500.0, 5.0, 0.1, "mg/L", True)
+                  "Pollution agricole. Au-delà de 50 mg/L : méthémoglobinémie chez les nourrissons.",
+                  "OMS : inférieur à 50 mg/L", 0.0, 500.0, 5.0, 0.1, "mg/L", True)
     no2 = triple("no2_p", "Nitrites (mg/L)",
-                  "Contamination organique recente.", "OMS : < 3 mg/L",
+                  "Indicateur de contamination organique récente.", "OMS : inférieur à 3 mg/L",
                   0.0, 20.0, 0.01, 0.001, "mg/L", True)
     nh4 = triple("nh4_p", "Ammonium (mg/L)",
-                  "Degradation matieres organiques.", "OMS : < 1,5 mg/L",
+                  "Dégradation des matières organiques, indicateur de contamination fécale.", "OMS : inférieur à 1,5 mg/L",
                   0.0, 50.0, 0.1, 0.01, "mg/L", True)
     pb_v = triple("pb_p", "Plomb (mg/L)",
-                   "Neurotoxique. Aucun seuil sur.", "OMS : < 0,01 mg/L",
+                   "Métal lourd neurotoxique. Aucun seuil sûr connu.", "OMS : inférieur à 0,01 mg/L",
                    0.0, 1.0, 0.002, 0.0001, "mg/L", True)
     cl_v = triple("cl_p", "Chlore residuel (mg/L)",
-                   "Desinfectant residuel eau traitee.", "Cible : 0,2-0,5 mg/L",
+                   "Désinfectant résiduel pour eau traitée. Absent dans les sources naturelles.", "Cible : 0,2 à 0,5 mg/L",
                    0.0, 5.0, 0.0, 0.001, "mg/L", True)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1343,9 +1558,9 @@ if module == "potable":
     if no3 is not None and no2 is not None and nh4 is not None:
         pi = round(no3 + no2 * 10 + nh4, 2)
         ni = (
-            "Faible (<10)" if pi < 10
-            else ("Modere (10-50)" if pi < 50
-                  else ("Eleve (50-150)" if pi < 150 else "Critique (>150)"))
+            "Faible (< 10)" if pi < 10
+            else ("Modéré (10 à 50)" if pi < 50
+                  else ("Élevé (50 à 150)" if pi < 150 else "Critique (> 150)"))
         )
         st.markdown(
             f'<div class="pi-box"><b>Indice de pollution chimique</b>'
@@ -1361,7 +1576,7 @@ if module == "potable":
         if not lieu.strip():
             erreurs.append("Lieu de prelevement obligatoire.")
         if nb_mesures < 3:
-            erreurs.append("Au moins 3 parametres mesures requis.")
+            erreurs.append("Au moins 3 paramètres mesurés sont requis pour lancer l’analyse.")
         if erreurs:
             for e in erreurs:
                 st.error(e)
@@ -1376,17 +1591,17 @@ if module == "potable":
             )
             conf = round(pr[cl_pred] * 100, 1)
             conseils = [
-                "Eau conforme aux normes OMS. Consommation possible sans risque.",
-                "Anomalies détectées. Filtrez et faites bouillir avant consommation.",
-                "Eau polluée. Traitement complet obligatoire avant tout usage.",
+                "Cette eau est conforme aux normes OMS. Elle peut être consommée sans risque pour la santé.",
+                "Des anomalies ont été détectées. Filtrez et faites bouillir cette eau avant toute consommation.",
+                "Cette eau est polluée et impropre à la consommation. Un traitement complet est obligatoire avant tout usage.",
                 "DANGER EXTRÊME. Tout contact à éviter. Signalez aux autorités.",
             ]
             methodes_p = [
-                ("Ébullition", "5 min minimum. Efficace contre bacteries, virus, parasites."),
-                ("Filtration sur sable et gravier", "Gravier + sable + charbon actif. Completer par ebullition."),
-                ("SODIS", "Bouteilles transparentes, 6 h soleil ou 2 j nuageux. OMS valide."),
-                ("Chloration", "2 gouttes Javel 5 % / litre. Attendre 30 min."),
-                ("Moringa oleifera", "2-3 graines broyees dans 1 L. Agiter + decanter 1 h."),
+                ("Ébullition", "Portez l’eau à ébullition pendant au moins 5 minutes. Efficace contre les bactéries, les virus et les parasites."),
+                ("Filtration sur sable et gravier", "Couches successives de gravier, sable fin et charbon de bois actif. À compléter par ébullition."),
+                ("Désinfection solaire SODIS", "Bouteilles transparentes exposées 6 h au soleil ou 2 jours par temps nuageux. Méthode gratuite validée par l’OMS."),
+                ("Chloration", "2 gouttes d’eau de Javel à 5 % par litre d’eau turbide (1 goutte si l’eau est claire). Patienter 30 minutes avant consommation."),
+                ("Moringa oleifera", "Broyer 2 à 3 graines sèches dans 1 litre d’eau turbide. Agiter 1 minute puis lentement 5 minutes. Décanter pendant 1 heure."),
             ]
             st.session_state.analyse_faite = True
             st.session_state.dernier_resultat = {
@@ -1401,30 +1616,30 @@ if module == "potable":
             }
             # Tableau conformite pour le PDF
             params_aff = [
-                ("E. coli", f"{ecoli:.1f} UFC/100mL" if ecoli is not None else "Non mesure",
+                ("E. coli", f"{ecoli:.1f} UFC/100mL" if ecoli is not None else "Non mesuré",
                  "0 UFC/100mL", statut_param(ecoli, 0, 0, inverse=True)),
-                ("pH", f"{pH_v:.3f}" if pH_v is not None else "Non mesure",
+                ("pH", f"{pH_v:.3f}" if pH_v is not None else "Non mesuré",
                  "6,5-8,5", statut_param(pH_v, 6.5, 8.5)),
-                ("Turbidite (NTU)", f"{turb:.3f}" if turb is not None else "Non mesure",
+                ("Turbidité (NTU)", f"{turb:.3f}" if turb is not None else "Non mesuré",
                  "< 5 NTU", statut_param(turb, 0, 5)),
-                ("Temperature (deg C)", f"{temp:.2f}" if temp is not None else "Non mesure",
+                ("Température (°C)", f"{temp:.2f}" if temp is not None else "Non mesuré",
                  "< 25 deg C", statut_param(temp, 0, 25)),
-                ("Conductivite (uS/cm)", f"{cond:.1f}" if cond is not None else "Non mesure",
+                ("Conductivité (µS/cm)", f"{cond:.1f}" if cond is not None else "Non mesuré",
                  "< 2 500 uS/cm", statut_param(cond, 0, 2500)),
-                ("Oxygene dissous (mg/L)", f"{o2_v:.3f}" if o2_v is not None else "Non mesure",
+                ("Oxygène dissous (mg/L)", f"{o2_v:.3f}" if o2_v is not None else "Non mesuré",
                  "> 6 mg/L", statut_param(o2_v, 6, 14)),
-                ("Nitrates (mg/L)", f"{no3:.3f}" if no3 is not None else "Non mesure",
+                ("Nitrates (mg/L)", f"{no3:.3f}" if no3 is not None else "Non mesuré",
                  "< 50 mg/L", statut_param(no3, 0, 50)),
-                ("Nitrites (mg/L)", f"{no2:.4f}" if no2 is not None else "Non mesure",
+                ("Nitrites (mg/L)", f"{no2:.4f}" if no2 is not None else "Non mesuré",
                  "< 3 mg/L", statut_param(no2, 0, 3)),
-                ("Ammonium (mg/L)", f"{nh4:.3f}" if nh4 is not None else "Non mesure",
+                ("Ammonium (mg/L)", f"{nh4:.3f}" if nh4 is not None else "Non mesuré",
                  "< 1,5 mg/L", statut_param(nh4, 0, 1.5)),
-                ("Plomb (mg/L)", f"{pb_v:.4f}" if pb_v is not None else "Non mesure",
+                ("Plomb (mg/L)", f"{pb_v:.4f}" if pb_v is not None else "Non mesuré",
                  "< 0,01 mg/L", statut_param(pb_v, 0, 0.01)),
-                ("Chlore residuel (mg/L)", f"{cl_v:.3f}" if cl_v is not None else "Non mesure",
+                ("Chlore residuel (mg/L)", f"{cl_v:.3f}" if cl_v is not None else "Non mesuré",
                  "0,2-0,5 mg/L",
                  statut_param(cl_v, 0.2, 0.5) if cl_v is not None
-                 else ("Non mesure", colors.HexColor("#9e9e9e"))),
+                 else ("Non mesuré", colors.HexColor("#9e9e9e"))),
             ]
             try:
                 pdf = construire_pdf(
@@ -1495,21 +1710,21 @@ elif module == "usee":
         " Risque grave pour l'ecosysteme et la sante publique.",
     ]
 
-    with st.expander("Normes de rejet - Eaux usees"):
+    with st.expander("Normes de rejet — Eaux usées"):
         st.markdown("""<table class="normes-table">
-<tr><th>Parametre</th><th>Conforme rejet</th><th>Limite</th>
-    <th>Non conforme</th><th>Tres polluee</th></tr>
+<tr><th>Paramètre</th><th>Conforme au rejet</th><th>Limite</th>
+    <th>Non conforme</th><th>Très polluée</th></tr>
 <tr><td>pH</td><td>6,0-9,0</td><td>5,5-10,5</td>
     <td>4,5-5,5 ou 10,5-11</td><td>&lt;4,5 ou &gt;11</td></tr>
-<tr><td>DBO5 (mg/L)</td><td>&lt;30</td><td>30-60</td>
+<tr><td>DBO₅ (mg/L)</td><td>&lt;30</td><td>30-60</td>
     <td>60-200</td><td>&gt;200</td></tr>
 <tr><td>DCO (mg/L)</td><td>&lt;90</td><td>90-180</td>
     <td>180-600</td><td>&gt;600</td></tr>
 <tr><td>MES (mg/L)</td><td>&lt;35</td><td>35-80</td>
     <td>80-300</td><td>&gt;300</td></tr>
-<tr><td>Temperature (deg C)</td><td>&lt;30</td><td>30-35</td>
+<tr><td>Température (°C)</td><td>&lt;30</td><td>30-35</td>
     <td>35-40</td><td>&gt;40</td></tr>
-<tr><td>NH4 (mg/L)</td><td>&lt;5</td><td>5-10</td>
+<tr><td>NH₄ (mg/L)</td><td>&lt;5</td><td>5-10</td>
     <td>10-30</td><td>&gt;30</td></tr>
 <tr><td>Plomb (mg/L)</td><td>&lt;0,1</td><td>0,1-0,3</td>
     <td>0,3-0,8</td><td>&gt;0,8</td></tr>
@@ -1522,10 +1737,10 @@ elif module == "usee":
         )
 
     analyste, lieu, source, lat_i, lon_i = bloc_analyste([
-        "Station d'epuration urbaine", "Effluent industriel",
+        "Station d’épuration urbaine", "Effluent industriel",
         "Eaux de ruissellement", "Effluent agricole",
-        "Decharge / lixiviat", "Fosse septique",
-        "Canal d'evacuation", "Autre",
+        "Décharge ou lixiviat", "Fosse septique",
+        "Canal d’évacuation", "Autre",
     ])
 
     st.markdown('<span class="section-title">Paramètres des eaux usées</span>',
@@ -1534,35 +1749,35 @@ elif module == "usee":
     st.markdown('<div class="cat-box cat-dbo">'
                 '<span class="cat-title cat-title-dbo">Paramètres organiques et physiques</span>',
                 unsafe_allow_html=True)
-    ph_eu = triple("ph_eu", "pH - Acidite/Basicite",
-                   "pH extreme = corrosion et toxicite.",
-                   "Norme rejet : 6,0-9,0", 0.0, 14.0, 7.2, 0.01, optionnel=True)
-    dbo5 = triple("dbo5", "DBO5 (mg/L) - Demande Biochimique en O2",
-                  "Charge organique biodegradable. Elevee = pollution organique forte.",
-                  "Norme rejet : < 30 mg/L", 0.0, 2000.0, 20.0, 0.5, "mg/L")
-    dco = triple("dco", "DCO (mg/L) - Demande Chimique en O2",
-                 "Mesure toute la matiere oxydable.",
-                 "Norme rejet : < 90 mg/L", 0.0, 5000.0, 70.0, 1.0, "mg/L")
-    mes = triple("mes", "MES (mg/L) - Matieres en Suspension",
-                 "Particules solides en suspension.",
-                 "Norme rejet : < 35 mg/L", 0.0, 2000.0, 25.0, 0.5, "mg/L")
-    temp_eu = triple("temp_eu", "Temperature (deg C)",
-                     "Eau chaude : reduit l'O2 dissous du milieu recepteur.",
-                     "Norme rejet : < 30 deg C", 0.0, 60.0, 27.0, 0.1, "deg C", True)
+    ph_eu = triple("ph_eu", "pH — Acidité / Basicité",
+                   "pH extrême : corrosion des canalisations et toxicité pour les organismes aquatiques.",
+                   "Norme de rejet : 6,0 à 9,0", 0.0, 14.0, 7.2, 0.01, optionnel=True)
+    dbo5 = triple("dbo5", "DBO₅ (mg/L) — Demande biochimique en oxygène",
+                  "Charge organique biodégradable. Valeur élevée : pollution organique importante.",
+                  "Norme de rejet : inférieur à 30 mg/L", 0.0, 2000.0, 20.0, 0.5, "mg/L")
+    dco = triple("dco", "DCO (mg/L) — Demande chimique en oxygène",
+                 "Mesure toute la matière oxydable. Rapport DCO/DBO₅ supérieur à 3 : composés récalcitrants.",
+                 "Norme de rejet : inférieur à 90 mg/L", 0.0, 5000.0, 70.0, 1.0, "mg/L")
+    mes = triple("mes", "MES (mg/L) — Matières en suspension",
+                 "Particules solides en suspension. Colmatage du milieu récepteur et asphyxie de la faune aquatique.",
+                 "Norme de rejet : inférieur à 35 mg/L", 0.0, 2000.0, 25.0, 0.5, "mg/L")
+    temp_eu = triple("temp_eu", "Température (°C)",
+                     "Eau chaude : réduction de l’oxygène dissous dans le milieu récepteur.",
+                     "Norme de rejet : inférieur à 30 °C", 0.0, 60.0, 27.0, 0.1, "deg C", True)
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown('<div class="cat-box cat-chimique">'
                 '<span class="cat-title cat-title-chimique">Paramètres chimiques et microbiologiques</span>',
                 unsafe_allow_html=True)
-    nh4_eu = triple("nh4_eu", "NH4 (mg/L) - Ammonium",
-                    "Indicateur de pollution azotee et fecale.",
-                    "Norme rejet : < 5 mg/L", 0.0, 500.0, 3.0, 0.1, "mg/L", True)
+    nh4_eu = triple("nh4_eu", "NH₄ (mg/L) — Ammonium",
+                    "Indicateur de pollution azotée et fécale. Toxique pour les poissons à forte concentration.",
+                    "Norme de rejet : inférieur à 5 mg/L", 0.0, 500.0, 3.0, 0.1, "mg/L", True)
     pb_eu = triple("pb_eu", "Plomb (mg/L)",
-                   "Metal lourd toxique. Bioaccumulation dans la chaine alimentaire.",
-                   "Norme rejet : < 0,1 mg/L", 0.0, 5.0, 0.08, 0.001, "mg/L", True)
+                   "Métal lourd toxique. Bioaccumulation dans la chaîne alimentaire aquatique.",
+                   "Norme de rejet : inférieur à 0,1 mg/L", 0.0, 5.0, 0.08, 0.001, "mg/L", True)
     ecoli_eu = triple("ecoli_eu", "E. coli (UFC/100 mL)",
-                      "Indicateur de contamination fecale dans l'effluent.",
-                      "Norme rejet : < 2 000 UFC/100 mL",
+                      "Indicateur de contamination fécale de l’effluent.",
+                      "Norme de rejet : inférieur à 2 000 UFC/100 mL",
                       0.0, 10000000.0, 500.0, 10.0, "UFC/100 mL", True)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1583,7 +1798,7 @@ elif module == "usee":
         if not analyste.strip():
             erreurs.append("Nom de l'analyste obligatoire.")
         if not lieu.strip():
-            erreurs.append("Lieu obligatoire.")
+            erreurs.append("Le lieu de prélèvement est obligatoire.")
         if erreurs:
             for e in erreurs:
                 st.error(e)
@@ -1594,9 +1809,9 @@ elif module == "usee":
                 ("Traitement primaire",
                  "Décantation et flottation : élimination des MES. Réduction de la DBO de 30 à 40 %."),
                 ("Traitement secondaire biologique",
-                 "Boues activées ou lagunage : dégradation de la matière organique. Réduction de la DBO supérieure à 85 %."),
+                 "Boues activées ou lagunage : dégradation de la matière organique. Réduction de la DBO supérieure à 85 %."),
                 ("Traitement tertiaire",
-                 "Désinfection UV ou chloration pour éliminer les pathogènes avant rejet."),
+                 "Désinfection par UV ou chloration pour éliminer les pathogènes avant le rejet."),
                 ("Neutralisation du pH",
                  "Ajout de chaux (si pH acide) ou d\'acide chlorhydrique (si pH alcalin)."),
                 ("Traitement metaux lourds",
@@ -1620,7 +1835,7 @@ elif module == "usee":
                  statut_param(dco, 0, 90)),
                 ("MES (mg/L)", f"{mes:.1f}", "< 35",
                  statut_param(mes, 0, 35)),
-                ("Temperature (deg C)", f"{feat_eu['Temperature']:.1f}", "< 30",
+                ("Température (°C)", f"{feat_eu['Temperature']:.1f}", "< 30",
                  statut_param(feat_eu["Temperature"], 0, 30)),
                 ("NH4 (mg/L)", f"{feat_eu['NH4']:.2f}", "< 5",
                  statut_param(feat_eu["NH4"], 0, 5)),
@@ -1692,23 +1907,23 @@ elif module == "naturelle":
         "TRÈS MAUVAISE QUALITÉ. Milieu aquatique gravement dégradé. Intervention urgente requise.",
     ]
 
-    with st.expander("Normes qualite ecologique - Eaux naturelles"):
+    with st.expander("Normes qualité écologique — Eaux naturelles"):
         st.markdown("""<table class="normes-table">
-<tr><th>Parametre</th><th>Bonne</th><th>Moyenne</th>
-    <th>Mauvaise</th><th>Tres mauvaise</th></tr>
+<tr><th>Paramètre</th><th>Bonne qualité</th><th>Qualité moyenne</th>
+    <th>Mauvaise qualité</th><th>Très mauvaise</th></tr>
 <tr><td>pH</td><td>6,5-8,0</td><td>6,0-9,0</td>
     <td>5,5-9,5</td><td>&lt;5,5</td></tr>
-<tr><td>Turbidite (NTU)</td><td>&lt;5</td><td>5-20</td>
+<tr><td>Turbidité (NTU)</td><td>&lt;5</td><td>5-20</td>
     <td>20-100</td><td>&gt;100</td></tr>
-<tr><td>O2 dissous (mg/L)</td><td>&gt;7</td><td>5-7</td>
+<tr><td>O₂ dissous (mg/L)</td><td>&gt;7</td><td>5-7</td>
     <td>2-5</td><td>&lt;2</td></tr>
 <tr><td>Nitrates (mg/L)</td><td>&lt;5</td><td>5-25</td>
     <td>25-100</td><td>&gt;100</td></tr>
 <tr><td>E. coli (UFC/100 mL)</td><td>&lt;100</td><td>100-1 000</td>
     <td>1 000-100 000</td><td>&gt;100 000</td></tr>
-<tr><td>Temperature (deg C)</td><td>&lt;25</td><td>25-30</td>
+<tr><td>Température (°C)</td><td>&lt;25</td><td>25-30</td>
     <td>30-36</td><td>&gt;36</td></tr>
-<tr><td>Conductivite (uS/cm)</td><td>&lt;400</td><td>400-1 000</td>
+<tr><td>Conductivité (µS/cm)</td><td>&lt;400</td><td>400-1 000</td>
     <td>1 000-2 500</td><td>&gt;2 500</td></tr>
 </table>""", unsafe_allow_html=True)
         st.caption(
@@ -1717,9 +1932,9 @@ elif module == "naturelle":
         )
 
     analyste, lieu, source, lat_i, lon_i = bloc_analyste([
-        "Riviere / cours d'eau", "Lac / retenue", "Marigot / zone humide",
-        "Lagune / estuaire", "Source naturelle", "Barrage / reservoir",
-        "Nappe phreatique affleurante", "Autre",
+        "Rivière ou cours d’eau", "Lac ou retenue", "Marigot ou zone humide",
+        "Lagune ou estuaire", "Source naturelle", "Barrage ou réservoir",
+        "Nappe phréatique affleurante", "Autre",
     ])
 
     st.markdown('<span class="section-title">Paramètres écologiques</span>',
@@ -1727,27 +1942,27 @@ elif module == "naturelle":
     st.markdown('<div class="cat-box cat-ecologie">'
                 '<span class="cat-title cat-title-eco">Qualité physico-chimique et biologique</span>',
                 unsafe_allow_html=True)
-    ph_en = triple("ph_en", "pH - Equilibre du milieu aquatique",
-                   "Hors norme = stress pour la faune aquatique.",
-                   "Norme ecologique : 6,5-8,0", 0.0, 14.0, 7.2, 0.01, optionnel=True)
-    turb_en = triple("turb_en", "Turbidite (NTU)",
-                     "Limite la photosynthese des plantes aquatiques.",
-                     "Norme : < 5 NTU", 0.0, 500.0, 2.5, 0.1, "NTU")
-    o2_en = triple("o2_en", "Oxygene dissous (mg/L)",
-                   "Vital pour la vie aquatique. Insuffisant = mort des poissons.",
-                   "Norme : > 7 mg/L", 0.0, 20.0, 8.0, 0.01, "mg/L")
+    ph_en = triple("ph_en", "pH — Équilibre du milieu aquatique",
+                   "Hors norme : stress physiologique pour la faune aquatique.",
+                   "Norme écologique : 6,5 à 8,0", 0.0, 14.0, 7.2, 0.01, optionnel=True)
+    turb_en = triple("turb_en", "Turbidité (NTU)",
+                     "Limite la photosynthèse des plantes aquatiques et masque les prédateurs naturels.",
+                     "Norme : inférieur à 5 NTU", 0.0, 500.0, 2.5, 0.1, "NTU")
+    o2_en = triple("o2_en", "Oxygène dissous (mg/L)",
+                   "Vital pour la vie aquatique. En dessous de 5 mg/L, poissons et invertébrés suffoquent.",
+                   "Norme : supérieur à 7 mg/L", 0.0, 20.0, 8.0, 0.01, "mg/L")
     no3_en = triple("no3_en", "Nitrates (mg/L)",
-                    "Eutrophisation = algues excessives, asphyxie du milieu.",
-                    "Norme : < 5 mg/L", 0.0, 1000.0, 3.0, 0.1, "mg/L")
+                    "Eutrophisation : prolifération d’algues, asphyxie et mort du milieu aquatique.",
+                    "Norme : inférieur à 5 mg/L", 0.0, 1000.0, 3.0, 0.1, "mg/L")
     ecoli_en = triple("ecoli_en", "E. coli (UFC/100 mL)",
-                      "Indicateur de pollution fecale du milieu.",
-                      "Norme : < 100 UFC/100 mL", 0.0, 1000000.0, 15.0, 1.0, "UFC/100 mL")
-    temp_en = triple("temp_en", "Temperature (deg C)",
-                     "Influence la teneur en O2 et le metabolisme des especes.",
-                     "Norme : < 25 deg C", 0.0, 60.0, 22.0, 0.1, "deg C", True)
-    cond_en = triple("cond_en", "Conductivite (uS/cm)",
-                     "Indique la mineralisation et la salinite du milieu.",
-                     "Norme : < 400 uS/cm", 0.0, 10000.0, 200.0, 1.0, "uS/cm", True)
+                      "Indicateur de contamination fécale du milieu naturel.",
+                      "Norme : inférieur à 100 UFC/100 mL", 0.0, 1000000.0, 15.0, 1.0, "UFC/100 mL")
+    temp_en = triple("temp_en", "Température (°C)",
+                     "Influence la teneur en oxygène dissous et le métabolisme des espèces aquatiques.",
+                     "Norme : inférieur à 25 °C", 0.0, 60.0, 22.0, 0.1, "deg C", True)
+    cond_en = triple("cond_en", "Conductivité (µS/cm)",
+                     "Indique la minéralisation et la salinité du milieu aquatique.",
+                     "Norme : inférieur à 400 µS/cm", 0.0, 10000.0, 200.0, 1.0, "uS/cm", True)
     st.markdown("</div>", unsafe_allow_html=True)
 
     feat_en = {
@@ -1766,7 +1981,7 @@ elif module == "naturelle":
         if not analyste.strip():
             erreurs.append("Nom de l'analyste obligatoire.")
         if not lieu.strip():
-            erreurs.append("Lieu obligatoire.")
+            erreurs.append("Le lieu de prélèvement est obligatoire.")
         if erreurs:
             for e in erreurs:
                 st.error(e)
@@ -1774,15 +1989,15 @@ elif module == "naturelle":
             cl_pred, pr = predict_module("naturelle", feat_en)
             conf = round(pr[cl_pred] * 100, 1)
             methodes_en = [
-                ("Reduction intrants agricoles",
+                ("Réduction des intrants agricoles",
                  "Limiter les engrais azotés. Zones tampons végétalisées en bordure de cours d\'eau."),
                 ("Traitement des rejets urbains",
                  "Mettre en place des stations d\'épuration en amont. Traitement obligatoire avant rejet."),
                 ("Restauration hydromorphologique",
                  "Reméandrement, recharge granulométrique, plantation de ripisylve."),
-                ("Reduction pollutions diffuses",
+                ("Réduction des pollutions diffuses",
                  "Sensibilisation agricole. Réduction des pesticides. Gestion rigoureuse des déchets."),
-                ("Surveillance reguliere",
+                ("Surveillance régulière",
                  "Mise en place d\'un réseau de surveillance avec analyses périodiques."),
             ]
             st.session_state.analyse_faite = True
@@ -1797,7 +2012,7 @@ elif module == "naturelle":
             params_aff = [
                 ("pH", f"{feat_en['pH']:.2f}", "6,5-8,0",
                  statut_param(feat_en["pH"], 6.5, 8.0)),
-                ("Turbidite (NTU)", f"{turb_en:.3f}", "< 5",
+                ("Turbidité (NTU)", f"{turb_en:.3f}", "< 5",
                  statut_param(turb_en, 0, 5)),
                 ("O2 dissous (mg/L)", f"{o2_en:.3f}", "> 7",
                  statut_param(o2_en, 7, 14)),
@@ -1805,9 +2020,9 @@ elif module == "naturelle":
                  statut_param(no3_en, 0, 5)),
                 ("E. coli (UFC/100 mL)", f"{ecoli_en:.0f}", "< 100",
                  statut_param(ecoli_en, 0, 100, inverse=True)),
-                ("Temperature (deg C)", f"{feat_en['Temperature']:.2f}", "< 25",
+                ("Température (°C)", f"{feat_en['Temperature']:.2f}", "< 25",
                  statut_param(feat_en["Temperature"], 0, 25)),
-                ("Conductivite (uS/cm)", f"{feat_en['Conductivite']:.1f}", "< 400",
+                ("Conductivité (µS/cm)", f"{feat_en['Conductivite']:.1f}", "< 400",
                  statut_param(feat_en["Conductivite"], 0, 400)),
             ]
             try:
@@ -1876,11 +2091,11 @@ elif module == "agricole":
         " toxicite ionique et degradation de la structure du sol. Ne pas utiliser.",
     ]
 
-    with st.expander("Normes FAO - Eau d'irrigation"):
+    with st.expander("Normes FAO — Eau d’irrigation"):
         st.markdown("""<table class="normes-table">
-<tr><th>Parametre</th><th>Bonne aptitude</th><th>Moderee</th>
-    <th>Risque</th><th>Inadaptee</th></tr>
-<tr><td>Conductivite (uS/cm)</td><td>&lt;700</td><td>700-1 500</td>
+<tr><th>Paramètre</th><th>Bonne aptitude</th><th>Modérée</th>
+    <th>Risque</th><th>Inadaptée</th></tr>
+<tr><td>Conductivité (µS/cm)</td><td>&lt;700</td><td>700-1 500</td>
     <td>1 500-3 000</td><td>&gt;3 000</td></tr>
 <tr><td>pH</td><td>6,5-7,5</td><td>7,5-8,5</td>
     <td>8,5-9,2</td><td>&gt;9,2</td></tr>
@@ -1901,10 +2116,10 @@ elif module == "agricole":
         )
 
     analyste, lieu, source, lat_i, lon_i = bloc_analyste([
-        "Riviere / cours d'eau", "Canal d'irrigation",
-        "Forage / puits profond", "Eau de barrage",
-        "Nappe phreatique", "Eau de pluie stockee",
-        "Eau recyclee agricole", "Autre",
+        "Rivière ou cours d’eau", "Canal d’irrigation",
+        "Forage ou puits profond", "Eau de barrage",
+        "Nappe phréatique", "Eau de pluie stockée",
+        "Eau recyclée à usage agricole", "Autre",
     ])
 
     st.markdown('<span class="section-title">Paramètres qualité eau agricole</span>',
@@ -1912,24 +2127,24 @@ elif module == "agricole":
     st.markdown('<div class="cat-box cat-agri">'
                 '<span class="cat-title cat-title-agri">Paramètres FAO - Salinite, sodicite, nutrition</span>',
                 unsafe_allow_html=True)
-    cond_ea = triple("cond_ea", "Conductivite (uS/cm) - Salinite",
-                     "Principal indicateur de salinite. Elevee = stress osmotique.",
-                     "FAO : < 700 uS/cm", 0.0, 20000.0, 400.0, 1.0, "uS/cm")
-    ph_ea = triple("ph_ea", "pH - Disponibilite des elements nutritifs",
-                   "pH optimal 6,5-7,5 pour la disponibilite des nutriments du sol.",
-                   "FAO : 6,5-7,5", 0.0, 14.0, 7.0, 0.01, optionnel=True)
-    na_ea = triple("na_ea", "Sodium Na (mg/L) - Sodicite",
-                   "Sodium excessif = degradation de la structure du sol.",
-                   "FAO : < 70 mg/L", 0.0, 5000.0, 45.0, 0.5, "mg/L")
+    cond_ea = triple("cond_ea", "Conductivité (µS/cm) — Salinité",
+                     "Principal indicateur de salinité. Valeur élevée : stress osmotique pour les plantes.",
+                     "FAO : inférieur à 700 µS/cm", 0.0, 20000.0, 400.0, 1.0, "uS/cm")
+    ph_ea = triple("ph_ea", "pH — Disponibilité des éléments nutritifs",
+                   "Le pH optimal (6,5 à 7,5) assure la meilleure disponibilité des nutriments dans le sol.",
+                   "FAO : 6,5 à 7,5", 0.0, 14.0, 7.0, 0.01, optionnel=True)
+    na_ea = triple("na_ea", "Sodium Na (mg/L) — Sodicité",
+                   "Sodium excessif : dégradation de la structure du sol par dispersion des argiles.",
+                   "FAO : inférieur à 70 mg/L", 0.0, 5000.0, 45.0, 0.5, "mg/L")
     no3_ea = triple("no3_ea", "Nitrates (mg/L) - Azote disponible",
-                    "Nitrates = engrais naturel. Exces = pollution des nappes.",
-                    "FAO : < 10 mg/L", 0.0, 500.0, 5.0, 0.1, "mg/L", True)
+                    "Azote naturellement utile pour les cultures. Excès : pollution des nappes phréatiques.",
+                    "FAO : inférieur à 10 mg/L", 0.0, 500.0, 5.0, 0.1, "mg/L", True)
     ca_ea = triple("ca_ea", "Calcium Ca (mg/L) - Structure du sol",
-                   "Le calcium stabilise la structure du sol et equilibre le sodium.",
-                   "FAO : > 40 mg/L", 0.0, 1000.0, 60.0, 0.5, "mg/L", True)
+                   "Le calcium stabilise la structure du sol et contrebalance l’effet néfaste du sodium.",
+                   "FAO : supérieur à 40 mg/L", 0.0, 1000.0, 60.0, 0.5, "mg/L", True)
     mg_ea = triple("mg_ea", "Magnesium Mg (mg/L) - Nutrition vegetale",
-                   "Cofacteur de la chlorophylle. Insuffisant = chlorose des feuilles.",
-                   "FAO : > 15 mg/L", 0.0, 500.0, 18.0, 0.5, "mg/L", True)
+                   "Cofacteur essentiel de la chlorophylle. Carence : chlorose foliaire et baisse de rendement.",
+                   "FAO : supérieur à 15 mg/L", 0.0, 500.0, 18.0, 0.5, "mg/L", True)
 
     na_val = na_ea if na_ea is not None else 45.0
     ca_val = ca_ea if ca_ea is not None else 60.0
@@ -1937,7 +2152,7 @@ elif module == "agricole":
     sar_calc = round(na_val / np.sqrt((ca_val + mg_val) / 2), 2)
 
     sar_lbl = (
-        "Bonne aptitude (SAR < 3)" if sar_calc < 3
+        "Bonne aptitude — SAR < 3" if sar_calc < 3
         else ("Modéré (SAR : 3 à 9)" if sar_calc < 9
               else ("Risque (SAR : 9 à 18)" if sar_calc < 18 else "Inadapté (SAR > 18)"))
     )
@@ -1964,7 +2179,7 @@ elif module == "agricole":
         if not analyste.strip():
             erreurs.append("Nom de l'analyste obligatoire.")
         if not lieu.strip():
-            erreurs.append("Lieu obligatoire.")
+            erreurs.append("Le lieu de prélèvement est obligatoire.")
         if erreurs:
             for e in erreurs:
                 st.error(e)
@@ -1996,7 +2211,7 @@ elif module == "agricole":
                 "sar": sar_calc,
             }
             params_aff = [
-                ("Conductivite (uS/cm)", f"{cond_ea:.1f}", "< 700",
+                ("Conductivité (µS/cm)", f"{cond_ea:.1f}", "< 700",
                  statut_param(cond_ea, 0, 700)),
                 ("pH", f"{feat_ea['pH']:.2f}", "6,5-7,5",
                  statut_param(feat_ea["pH"], 6.5, 7.5)),
