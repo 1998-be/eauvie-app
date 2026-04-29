@@ -14,6 +14,32 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 )
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import os as _os
+
+# Enregistrement des polices Unicode pour les accents dans les PDF
+def _register_pdf_fonts():
+    fonts_lib = {
+        'LiberSans':             '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+        'LiberSansBold':         '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+        'LiberSansItalic':       '/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf',
+        'LiberSansBoldItalic':   '/usr/share/fonts/truetype/liberation/LiberationSans-BoldItalic.ttf',
+    }
+    fonts_dv = {
+        'LiberSans':             '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        'LiberSansBold':         '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+        'LiberSansItalic':       '/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf',
+        'LiberSansBoldItalic':   '/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf',
+    }
+    fonts = fonts_lib if _os.path.exists(fonts_lib['LiberSans']) else fonts_dv
+    for name, path in fonts.items():
+        try:
+            pdfmetrics.registerFont(TTFont(name, path))
+        except Exception:
+            pass
+
+_register_pdf_fonts()
 
 st.set_page_config(page_title="EauVie", page_icon="\U0001f4a7", layout="centered")
 
@@ -701,9 +727,9 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
         author=analyste or "EauVie",
     )
     story = []
-    sb = S("sb", fontName="Helvetica", fontSize=9, textColor=NK,
+    sb = S("sb", fontName="LiberSans", fontSize=9, textColor=NK,
            alignment=TA_JUSTIFY, leading=14, spaceAfter=5)
-    sn = S("sn", fontName="Helvetica-Oblique", fontSize=8,
+    sn = S("sn", fontName="LiberSansItalic", fontSize=8,
            textColor=colors.HexColor("#333"),
            alignment=TA_JUSTIFY, leading=12)
 
@@ -712,15 +738,15 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     # En-tete
     header = Table(
         [
-            [Paragraph("<b>EauVie - " + titre_mod + "</b>",
-                       S("hx", fontName="Helvetica-Bold", fontSize=18,
+            [Paragraph("<b>EauVie — " + titre_mod + "</b>",
+                       S("hx", fontName="LiberSansBold", fontSize=18,
                          textColor=WH, alignment=TA_CENTER))],
             [Paragraph(sous_titre,
-                       S("hs", fontName="Helvetica", fontSize=9.5,
+                       S("hs", fontName="LiberSans", fontSize=9.5,
                          textColor=colors.HexColor("#d0eeff"),
                          alignment=TA_CENTER, leading=13))],
-            [Paragraph("Proposee par Charles MEDEZOUNDJI",
-                       S("ha", fontName="Helvetica-Oblique", fontSize=8,
+            [Paragraph("Proposée par Charles Ezéchiel MEDEZOUNDJI",
+                       S("ha", fontName="LiberSansItalic", fontSize=8,
                          textColor=colors.HexColor("#a8d8ff"),
                          alignment=TA_CENTER))],
         ],
@@ -738,14 +764,14 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
 
     rt = Table(
         [[
-            Paragraph("<b>RAPPORT D'ANALYSE - " + titre_mod.upper() + "</b>",
-                      S("rd", fontName="Helvetica-Bold", fontSize=10,
+            Paragraph("<b>RAPPORT D’ANALYSE — " + titre_mod.upper() + "</b>",
+                      S("rd", fontName="LiberSansBold", fontSize=10,
                         textColor=BF, alignment=TA_CENTER)),
-            Paragraph("<b>Ref. :</b> " + ref_str,
-                      S("rd2", fontName="Helvetica", fontSize=8,
+            Paragraph("<b>Réf. :</b> " + ref_str,
+                      S("rd2", fontName="LiberSans", fontSize=8,
                         textColor=colors.HexColor("#555"), alignment=TA_LEFT)),
-            Paragraph("<b>Date :</b> " + date_str + "  |  " + heure_str,
-                      S("rd3", fontName="Helvetica", fontSize=8,
+            Paragraph("<b>Date :</b> " + date_str + "  —  " + heure_str,
+                      S("rd3", fontName="LiberSans", fontSize=8,
                         textColor=colors.HexColor("#555"), alignment=TA_RIGHT)),
         ]],
         colWidths=[7.5 * cm, 4 * cm, 6 * cm],
@@ -767,7 +793,7 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
         story.append(HRFlowable(
             width="100%", thickness=1.5, color=BM, spaceAfter=3))
         story.append(Paragraph(
-            txt, S("h1", fontName="Helvetica-Bold", fontSize=11,
+            txt, S("h1", fontName="LiberSansBold", fontSize=11,
                    textColor=BF, spaceBefore=8, spaceAfter=4)))
         story.append(HRFlowable(
             width="100%", thickness=0.4, color=GM, spaceAfter=5))
@@ -788,11 +814,11 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     ts("3.  INFORMATIONS SUR L’ÉCHANTILLON")
     info = [
         ["Référence du rapport", ref_str],
-        ["Date / Heure", date_str + " - " + heure_str],
-        ["Analyste", analyste or "Non renseigne"],
-        ["Lieu", lieu or "Non renseigne"],
+        ["Date et heure de l’analyse", date_str + " — " + heure_str],
+        ["Analyste responsable", analyste or "Non renseigné"],
+        ["Lieu", lieu or "Non renseigné"],
         ["Source", source],
-        ["Referentiel", ref_normes or "Normes OMS / FAO / Norme beninoise"],
+        ["Référentiel scientifique", ref_normes or "Normes OMS / FAO / Norme béninoise"],
     ]
     it = Table(info, colWidths=[4.5 * cm, 13 * cm])
     it.setStyle(TableStyle([
@@ -812,7 +838,7 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     ts("4.  MESURES ANALYSÉES")
     mh = [
         Paragraph("<b>" + t + "</b>",
-                  S("mh", fontName="Helvetica-Bold", fontSize=8,
+                  S("mh", fontName="LiberSansBold", fontSize=8,
                     textColor=WH, alignment=TA_CENTER))
         for t in ["Paramètre", "Valeur mesurée", "Norme de référence", "Statut"]
     ]
@@ -820,18 +846,18 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     for nom, val, nr, (st_txt, cu) in params_aff:
         mrows.append([
             Paragraph("<b>" + nom + "</b>",
-                      S("mc1", fontName="Helvetica-Bold", fontSize=8.5,
+                      S("mc1", fontName="LiberSansBold", fontSize=8.5,
                         textColor=BF, alignment=TA_LEFT)),
             Paragraph("<b>" + val + "</b>",
-                      S("mc2", fontName="Helvetica-Bold", fontSize=9,
+                      S("mc2", fontName="LiberSansBold", fontSize=9,
                         textColor=colors.HexColor("#9e9e9e")
                         if val == "Non mesuré" else NK,
                         alignment=TA_CENTER)),
-            Paragraph(nr, S("mc3", fontName="Helvetica", fontSize=8,
+            Paragraph(nr, S("mc3", fontName="LiberSans", fontSize=8,
                              textColor=colors.HexColor("#555"),
                              alignment=TA_CENTER)),
             Paragraph("<b>" + st_txt + "</b>",
-                      S("mc4", fontName="Helvetica-Bold", fontSize=8.5,
+                      S("mc4", fontName="LiberSansBold", fontSize=8.5,
                         textColor=cu, alignment=TA_CENTER)),
         ])
     mt = Table(mrows, colWidths=[5.5 * cm, 4 * cm, 4 * cm, 4 * cm])
@@ -855,12 +881,12 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     res = Table(
         [
             [Paragraph(label_final,
-                       S("rb", fontName="Helvetica-Bold", fontSize=16,
+                       S("rb", fontName="LiberSansBold", fontSize=16,
                          textColor=WH, alignment=TA_CENTER))],
             [Paragraph(
                 "Confiance : " + str(conf_val)
                 + " % | Random Forest 500 arbres | Precision : 100 %",
-                S("rb2", fontName="Helvetica", fontSize=8.5,
+                S("rb2", fontName="LiberSans", fontSize=8.5,
                   textColor=WH, alignment=TA_CENTER))],
         ],
         colWidths=[W - 3.6 * cm],
@@ -877,13 +903,13 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
 
     ph_r = [
         Paragraph("<b>" + l + "</b>",
-                  S("ph", fontName="Helvetica-Bold", fontSize=8,
+                  S("ph", fontName="LiberSansBold", fontSize=8,
                     textColor=WH, alignment=TA_CENTER))
         for l in classes_labels
     ]
     pv_r = [
         Paragraph("<b>" + str(round(p * 100, 1)) + " %</b>",
-                  S("pv", fontName="Helvetica-Bold", fontSize=9.5,
+                  S("pv", fontName="LiberSansBold", fontSize=9.5,
                     textColor=ccls[i], alignment=TA_CENTER))
         for i, p in enumerate(probabilites)
     ]
@@ -924,28 +950,28 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
             "chimique ou minérale et réduit l\'efficacité du chlore. La plage "
             "OMS de 6,5 à 8,5 garantit la sécurité et le bon goût de l\'eau."
         ),
-        "Turbidit\u00e9 (NTU)": (
+        "Turbidité (NTU)": (
             "La turbidité mesure la présence de particules en suspension "
             "(argile, matières organiques, micro-organismes). Une eau turbide "
             "protège les bactéries de la désinfection, rendant la chloration "
             "et l\'irradiation UV moins efficaces. Au-delà de 5 NTU, le risque "
             "infectieux augmente significativement."
         ),
-        "Temp\u00e9rature (\u00b0C)": (
+        "Température (°C)": (
             "La température influence directement la prolifération des "
             "micro-organismes pathogènes et la solubilisation de certains composés "
             "chimiques. Au-delà de 25 °C, la vitesse de multiplication bactérienne "
             "double toutes les 20 minutes. Elle conditionne également la teneur "
             "en oxygène dissous et le goût de l\'eau."
         ),
-        "Conductivit\u00e9 (\u00b5S/cm)": (
+        "Conductivité (µS/cm)": (
             "La conductivité mesure la capacité de l\'eau à conduire le courant "
             "électrique, directement proportionnelle à sa teneur en sels et "
             "minéraux dissous. Une conductivité élevée peut indiquer une "
             "intrusion saline, une pollution industrielle ou une minéralisation "
             "excessive pouvant affecter les reins à long terme."
         ),
-        "Oxyg\u00e8ne dissous (mg/L)": (
+        "Oxygène dissous (mg/L)": (
             "L\'oxygène dissous est indispensable aux processus "
             "d\'auto-épuration naturelle de l\'eau. Un taux faible indique "
             "une décomposition organique intense et peut favoriser la "
@@ -982,15 +1008,15 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
             "irréversibles. L\'OMS a abaissé son seuil de 50 à 10 µg/L en 2011, "
             "car aucune dose n\'est considérée comme sans effet."
         ),
-        "Chlore r\u00e9siduel (mg/L)": (
+        "Chlore résiduel (mg/L)": (
             "Le chlore résiduel garantit la désinfection continue de l\'eau "
             "depuis la station de traitement jusqu\'au robinet du consommateur. "
             "Un taux insuffisant expose au risque de recontamination dans "
             "le réseau. Un taux excessif génère des sous-produits de "
-            "chloration (trihalomeéthanes) présentant un risque cancérogène "
+            "chloration (trihalométhanes) présentant un risque cancérogène "
             "à long terme."
         ),
-        "DBO\u2085 (mg/L)": (
+        "DBO₅ (mg/L)": (
             "La DBO\u2085 mesure la quantité d\'oxygène consommée par les "
             "bactéries pour dégrader la matière organique en 5 jours à 20 °C. "
             "Elle représente la charge en matières organiques biodégradables "
@@ -1011,7 +1037,7 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
             "cours d\'eau et réduisent la lumière disponible pour les plantes "
             "aquatiques. Leur sédimentation crée des zones anoxiques."
         ),
-        "NH\u2084 (mg/L)": (
+        "NH₄ (mg/L)": (
             "L\'ammonium dans les eaux usées provient essentiellement "
             "de la dégradation des protéines et de l\'urée. Il est "
             "directement toxique pour les poissons (perturbation des échanges "
@@ -1033,7 +1059,7 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
             "échanges eau-racines. Une carence en calcium favorise "
             "la sodicisation et la compaction des sols irrigués."
         ),
-        "Magn\u00e9sium Mg (mg/L)": (
+        "Magnésium Mg (mg/L)": (
             "Le magnésium est le cofacteur central de la chlorophylle. "
             "Il intervient dans la photosynthèse, le métabolisme énergétique "
             "et le transport des phosphates dans la plante. Une carence "
@@ -1068,33 +1094,33 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     if interp_rows_data:
         # Tableau d'interpretation
         interp_header = [
-            Paragraph("<b>Param\u00e8tre</b>",
-                      S("ih", fontName="Helvetica-Bold", fontSize=8,
+            Paragraph("<b>Paramètre</b>",
+                      S("ih", fontName="LiberSansBold", fontSize=8,
                         textColor=WH, alignment=TA_CENTER)),
             Paragraph("<b>Valeur</b>",
-                      S("ih", fontName="Helvetica-Bold", fontSize=8,
+                      S("ih", fontName="LiberSansBold", fontSize=8,
                         textColor=WH, alignment=TA_CENTER)),
             Paragraph("<b>Statut</b>",
-                      S("ih", fontName="Helvetica-Bold", fontSize=8,
+                      S("ih", fontName="LiberSansBold", fontSize=8,
                         textColor=WH, alignment=TA_CENTER)),
-            Paragraph("<b>Interpr\u00e9tation scientifique</b>",
-                      S("ih", fontName="Helvetica-Bold", fontSize=8,
+            Paragraph("<b>Interprétation scientifique</b>",
+                      S("ih", fontName="LiberSansBold", fontSize=8,
                         textColor=WH, alignment=TA_CENTER)),
         ]
         interp_rows = [interp_header]
         for nom_i, val_i, st_i, cu_i, txt_i in interp_rows_data:
             interp_rows.append([
                 Paragraph("<b>" + nom_i + "</b>",
-                          S("ic1", fontName="Helvetica-Bold", fontSize=7.5,
+                          S("ic1", fontName="LiberSansBold", fontSize=7.5,
                             textColor=BF, alignment=TA_LEFT)),
                 Paragraph(val_i,
-                          S("ic2", fontName="Helvetica-Bold", fontSize=7.5,
+                          S("ic2", fontName="LiberSansBold", fontSize=7.5,
                             textColor=NK, alignment=TA_CENTER)),
                 Paragraph("<b>" + st_i + "</b>",
-                          S("ic3", fontName="Helvetica-Bold", fontSize=7.5,
+                          S("ic3", fontName="LiberSansBold", fontSize=7.5,
                             textColor=cu_i, alignment=TA_CENTER)),
                 Paragraph(txt_i,
-                          S("ic4", fontName="Helvetica", fontSize=7,
+                          S("ic4", fontName="LiberSans", fontSize=7,
                             textColor=NK, alignment=TA_JUSTIFY, leading=10)),
             ])
         it2 = Table(interp_rows,
@@ -1117,7 +1143,7 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     ts("7.  RECOMMANDATIONS ET MESURES À PRENDRE")
     at = Table(
         [[Paragraph(conseil_txt,
-                    S("al", fontName="Helvetica-Bold", fontSize=9,
+                    S("al", fontName="LiberSansBold", fontSize=9,
                       textColor=WH, alignment=TA_JUSTIFY, leading=13))]],
         colWidths=[W - 3.6 * cm],
     )
@@ -1133,7 +1159,7 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
     for m, d in methodes_list:
         story.append(Paragraph(
             "- <b>" + m + "</b> : " + d,
-            S("bl", fontName="Helvetica", fontSize=8.5, textColor=NK,
+            S("bl", fontName="LiberSans", fontSize=8.5, textColor=NK,
               leftIndent=10, leading=13, spaceAfter=2),
         ))
     story.append(Spacer(1, 0.3 * cm))
@@ -1148,10 +1174,10 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
         "et al. (2010), Boukari et al. (2003), Vodounnou et al. (2020), "
         "SONEB bulletins qualité 2018-2022, FAO 1994 (Ayers & Westcot), "
         "OMS 2006 et 2017, Directive 91/271/CEE, DCE 2000/60/CE, SODAGRI Benin, "
-        "Direction Nationale de l'Hydraulique du Benin, USEPA 2022, "
+        "Direction Nationale de l’Hydraulique du Bénin, USEPA 2022, "
         "Norme béninoise NB 001/2001. Précision 100 % en validation croisée 5‑fold.",
         "Ce rapport ne se substitue pas à une analyse en laboratoire agréé. "
-        "Pour une certification officielle de conformite, des tests complémentaires "
+        "Pour une certification officielle, des analyses complémentaires "
         "en laboratoire agréé sont recommandées.",
     ], 1):
         story.append(Paragraph(
@@ -1165,16 +1191,16 @@ def construire_pdf(titre_mod, sous_titre, couleur_mod, params_aff,
         [[
             Paragraph(
                 "<b>EauVie</b> — " + titre_mod + "<br/>"
-                "Charles Ezéchiel MEDEZOUNDJI | Réf. " + ref_str,
-                S("ft1", fontName="Helvetica", fontSize=7,
+                "Charles Ezéchiel MEDEZOUNDJI — Bioinformatique et biologie systémique, chimie numérique | Réf. " + ref_str,
+                S("ft1", fontName="LiberSans", fontSize=7,
                   textColor=colors.HexColor("#555"),
                   alignment=TA_LEFT, leading=10),
             ),
             Paragraph(
-                "4 modules - 100 % precision<br/>"
-                "Ne remplace pas un laboratoire agréé<br/>"
-                "<b>EauVie 2026</b>",
-                S("ft2", fontName="Helvetica", fontSize=7,
+                "4 modules — 100 % de précision<br/>"
+                "Ne remplace pas un laboratoire agréé.<br/>"
+                "<b>© EauVie 2026</b>",
+                S("ft2", fontName="LiberSans", fontSize=7,
                   textColor=colors.HexColor("#555"),
                   alignment=TA_RIGHT, leading=10),
             ),
@@ -1408,7 +1434,7 @@ def afficher_resultat(label_final, cs, conf, pr, classes_labels,
         )
     st.markdown(f"**Conseil :** {conseil_txt}")
     if methodes and classe_pred > 0:
-        with st.expander("Recommandations détaillées"):
+        with st.expander("Voir les recommandations détaillées"):
             for m, d in methodes:
                 st.markdown(
                     f'<div class="conseil-box">'
